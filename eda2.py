@@ -47,10 +47,10 @@ SIGNAL_HANDLERS = {}
 CLEANUP_FUNCTION = None
 
 # IO pin allocations on the Raspberry Pi GPIO header
-CS_DECODE_A = 6          # Bit 0 of the address on the 74X138 3-to-8 decoder
-CS_DECODE_B = 12         # Bit 0 of the address on the 74X138 3-to-8 decoder
-CS_DECODE_C = 13         # Bit 0 of the address on the 74X138 3-to-8 decoder
-CS_DECODE_ENABLE = 26    # Enable (active high) on the 74X138 3-to-8 decoder
+CS_DECODE_A = 31          # Bit 0 of the address on the 74X138 3-to-8 decoder
+CS_DECODE_B = 32         # Bit 0 of the address on the 74X138 3-to-8 decoder
+CS_DECODE_C = 33         # Bit 0 of the address on the 74X138 3-to-8 decoder
+CS_DECODE_ENABLE = 37    # Enable (active high) on the 74X138 3-to-8 decoder
 
 
 def init():
