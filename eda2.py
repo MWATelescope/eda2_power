@@ -184,7 +184,9 @@ class ADCset(object):
     def readADC(self, chipnum=0, channel=0):
         with self.lock:
             self._chip_select(number=chipnum)
-            cmd = [1, 0x08 | channel, 0]
+            chanstr = '{0:03b}'.format(channel)
+            d2, d1, d0 = int(chanstr[-3]), int(chanstr[-2]), int(chanstr[-1])
+            cmd = [(0x6 | d2), (d1 << 7) | (d0 << 6), 0]
             r = self.spi.xfer2(cmd)   # Returns three bytes - the first is 0, the second and third are 0000XXXX, and XXXXXXXX
             self._chip_select(number=None)
             return 256 * (r[1] & 0x1111) + r[2]
