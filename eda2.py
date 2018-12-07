@@ -10,6 +10,7 @@ import time
 import traceback
 
 import RPi.GPIO as GPIO
+import smbus
 
 import spidev
 
@@ -47,10 +48,16 @@ SIGNAL_HANDLERS = {}
 CLEANUP_FUNCTION = None
 
 # IO pin allocations on the Raspberry Pi GPIO header
-CS_DECODE_A = 31          # Bit 0 of the address on the 74X138 3-to-8 decoder
-CS_DECODE_B = 32         # Bit 0 of the address on the 74X138 3-to-8 decoder
-CS_DECODE_C = 33         # Bit 0 of the address on the 74X138 3-to-8 decoder
+CS_DECODE_A = 31         # Bit 0 of the address on the 74X138 3-to-8 decoder
+CS_DECODE_B = 32         # Bit 1 of the address on the 74X138 3-to-8 decoder
+CS_DECODE_C = 33         # Bit 2 of the address on the 74X138 3-to-8 decoder
 CS_DECODE_ENABLE = 37    # Enable (active high) on the 74X138 3-to-8 decoder
+
+# I2C device addresses for the PCA6416A IO control chip on the digital board. Note that these are _seven_ bit addresses,
+# so 0x20 in seven bits corresponds to 0x40/0x41 when the r/w bit is appended as bit 0 of the address, and
+# 0x21 corresponds to 0x42/0x43 with a r/w bit of 0.
+ADDRESS7_PCA6416A_1 = 0x20
+ADDRESS7_PCA6416A_2 = 0x21
 
 
 def init():
@@ -159,20 +166,22 @@ class ADCset(object):
         :return: True for success, False if there was an error.
         """
         if number is None:
-            GPIO.output(CS_DECODE_ENABLE, 0)
+            with self.lock:
+                GPIO.output(CS_DECODE_ENABLE, 0)
             logger.info('Disabled all outputs on 74X138')
             return True
         else:
             if type(number) == int:
                 if (number >= 0) and (number <= 7):
-                    GPIO.output(CS_DECODE_ENABLE, 0)
-                    numstr = '{0:03b}'.format(number)
-                    a, b, c = int(numstr[-1]), int(numstr[-2]), int(numstr[-3])
-                    GPIO.output(CS_DECODE_A, a)
-                    GPIO.output(CS_DECODE_B, b)
-                    GPIO.output(CS_DECODE_C, c)
-                    GPIO.output(CS_DECODE_ENABLE, 1)
-                    logger.info('Selected output %d on 74X138')
+                    with self.lock:
+                        GPIO.output(CS_DECODE_ENABLE, 0)
+                        numstr = '{0:03b}'.format(number)
+                        a, b, c = int(numstr[-1]), int(numstr[-2]), int(numstr[-3])
+                        GPIO.output(CS_DECODE_A, a)
+                        GPIO.output(CS_DECODE_B, b)
+                        GPIO.output(CS_DECODE_C, c)
+                        GPIO.output(CS_DECODE_ENABLE, 1)
+                    logger.info('Selected output %d on 74X138' % number)
                     return True
                 else:
                     logger.error('Argument to chip_select must be None, or 0-7, not %d' % number)
@@ -182,16 +191,76 @@ class ADCset(object):
                 return False
 
     def readADC(self, chipnum=0, channel=0):
+        cmd = [1, 0x08 | channel, 0]
         with self.lock:
             self._chip_select(number=chipnum)
-            cmd = [1, 0x08 | channel, 0]
             r = self.spi.xfer2(cmd)   # Returns three bytes - the first is 0, the second and third are 0000XXXX, and XXXXXXXX
             self._chip_select(number=None)
-            return 256 * (r[1] & 0x1111) + r[2]
+        return 256 * (r[1] & 0x1111) + r[2]
+
+
+class IO_Control(object):
+    def __init__(self, instance=1):
+        self.lock = threading.RLock()
+        self.bus = smbus.SMBus(1)
+        if instance == 1:
+            self.address = ADDRESS7_PCA6416A_1
+        elif instance == 2:
+            self.address = ADDRESS7_PCA6416A_2
+        else:
+            logger.error('Invalid 6416 instance (must be 1 or 2, not %d)' % instance)
+            return
+
+        self.portmap = [0] * 16  # Defaults to all outputs off.
+        with self.lock:
+            self.bus.write_i2c_block_data(self.address, 2, [0, 0])  # Write 0,0 to output registers, to make sure outputs are off
+            self.bus.write_i2c_block_data(self.address, 4, [0, 0])  # Write 0,0 to polarity inversion register, for no inversion
+            self.bus.write_i2c_block_data(self.address, 6, [0, 0])  # Write 0,0 to configuration register, to set pins to outputs
+
+    def _write_outputs(self, p1=0, p2=0):
+        """
+        Write 8 bits of output data to each of port1 and port 2 on the given PCA6416A chip, via i2c
+        :param p1: port 1 output data (0-255)
+        :param p2: port 2 output data (0-255)
+        :return: None
+        """
+        with self.lock:
+            self.bus.write_i2c_block_data(self.address, 2, [p1, p2])  # Write 0,0 to output registers, to make sure outputs are off
+
+    def turnon(self, channel=0):
+        if type(channel) not in [int, long]:
+            logger.error('Channel number must be an int from 1-16, not %s' % channel)
+            return False
+        if (channel < 1) or (channel > 16):
+            logger.error('Channel number must be an int from 1-16, not %d' % channel)
+            return False
+
+        with self.lock:
+            self.portmap[channel - 1] = 1
+            p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
+            p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
+            self._write_outputs(p1=p1, p2=p2)
+
+    def turnoff(self, channel=0):
+        if type(channel) not in [int, long]:
+            logger.error('Channel number must be an int from 1-16, not %s' % channel)
+            return False
+        if (channel < 1) or (channel > 16):
+            logger.error('Channel number must be an int from 1-16, not %d' % channel)
+            return False
+
+        with self.lock:
+            self.portmap[channel - 1] = 0
+            p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
+            p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
+            self._write_outputs(p1=p1, p2=p2)
 
 
 if __name__ == '__main__':
     init()
+    adcs = ADCset()
+    c1 = IO_Control(instance=1)
+    c2 = IO_Control(instance=2)
     logger.info('Main code starting.')
     # do stuff
     # RegisterCleanup(cleanup)             # Trap signals and register the cleanup() function to be run on exit.
