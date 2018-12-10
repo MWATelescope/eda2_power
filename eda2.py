@@ -11,7 +11,8 @@ Python 2.7.13 (default, Sep 26 2018, 18:42:22)
 [GCC 6.3.0 20170516] on linux2
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import eda2
->>>
+>>> adcs = eda2.ADC_Set()
+>>> c1 = eda2.I2C_Control(instance=1)
 
 
 """
@@ -74,6 +75,8 @@ CS_DECODE_ENABLE = 37    # Enable (active high) on the 74X138 3-to-8 decoder
 # 0x21 corresponds to 0x42/0x43 with a r/w bit of 0.
 ADDRESS7_PCA6416A_1 = 0x20
 ADDRESS7_PCA6416A_2 = 0x21
+
+ADDRESS_HIH7120 = 0x27   # Honeywell humidity/temperature sensor I2C address
 
 
 def init():
@@ -340,6 +343,36 @@ class I2C_Control(object):
             self._write_outputs(p1=p1, p2=p2)
         return True
 
+    def turn_all_on(self):
+        """
+        Turn ON all the outputs for this 6416 chip.
+
+        :return: False if there was an error, True otherwise.
+        """
+        # TODO - loop over them all with a short delay, to reduce switching transients.
+        with self.lock:
+            self.portmap = [1] * 16
+            p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
+            p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
+            self._write_outputs(p1=p1, p2=p2)
+        return True
+
+    def turn_all_off(self):
+        """
+        Turn OFF all the outputs for this 6416 chip.
+
+        :return: False if there was an error, True otherwise.
+        """
+        # TODO - loop over them all with a short delay, to reduce switching transients.
+        with self.lock:
+            self.portmap = [0] * 16
+            p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
+            p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
+            self._write_outputs(p1=p1, p2=p2)
+        return True
+
+    # TODO - this will need to change, as there will be two of these instances for the two 6416 chips, but there's
+    # only one HIH7120 chip.
     def read_environment(self):
         """
         Reads the HIH7120 humidity/temperature sensor, and return the relative humidity as a percenteage,
@@ -350,7 +383,7 @@ class I2C_Control(object):
         with self.lock:
             self.bus.write_quick(0x27)
             time.sleep(0.11)  # Wait 110ms for conversion
-            data = self.bus.read_i2c_block(0x27, 0, 4)
+            data = self.bus.read_i2c_block_data(0x27, 0, 4)
         h_raw = (data[0] & 63) * 256 + data[1]
         humidity = h_raw / 16382.0 * 100.0
         t_raw = (data[0] * 256 + data[1])
