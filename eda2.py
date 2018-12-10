@@ -386,7 +386,7 @@ class I2C_Control(object):
             data = self.bus.read_i2c_block_data(0x27, 0, 4)
         h_raw = (data[0] & 63) * 256 + data[1]
         humidity = h_raw / 16382.0 * 100.0
-        t_raw = (data[0] * 256 + data[1])
+        t_raw = (data[0] * 256 + data[1]) / 4
         temperature = t_raw / 16382.0 * 165 - 40
         return humidity, temperature
 
