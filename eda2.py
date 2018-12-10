@@ -1,5 +1,21 @@
 #!/usr/bin/python
 
+"""
+Code to run on the Raspberry Pi connected to the prototype EDA2 power control unit.
+
+Use as:
+
+pi@raspberrypi:~ $ cd eda2_power/
+pi@raspberrypi:~/eda2_power $ sudo python
+Python 2.7.13 (default, Sep 26 2018, 18:42:22)
+[GCC 6.3.0 20170516] on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+>>> import eda2
+>>>
+
+
+"""
+
 import atexit
 import logging
 from logging import handlers
@@ -151,8 +167,15 @@ def RegisterCleanup(func):
     atexit.register(CLEANUP_FUNCTION)
 
 
-class ADCset(object):
+class ADC_Set(object):
+    """
+    Handles communication with all eight of the MCP3208 A/D converter chips, and the 74X138 3-to-8 decoder chip
+    that's used to select the correct MCP3208 chip to talk to.
+    """
     def __init__(self):
+        """
+        Initialise the SPI bus, and create a lock object to control access to the 74X138 and the SPI bus.
+        """
         self.spi = spidev.SpiDev()
         self.spi.open(0, 0)
         self.lock = threading.RLock()
@@ -161,6 +184,20 @@ class ADCset(object):
         """
         If number is a number between 0 and 7, send that address to the 74X138 decoder chip, and enable that
         (active low) output. If number is None, disable all outputs.
+
+        The mapping is:
+
+        number  signal name
+        0       CS-X8
+        1       CS-X6
+        2       CS-X4
+        3       CS-X2
+        4       CS-X1
+        5       CS-X3
+        6       CS-X5
+        7       CS-X7
+
+        Note that the only currently populated 3208 chip, IC13, is on CS-X1 connected to output number 4.
 
         :param number: integer from 0-7 to enable an output on the 74X138, None to disable all outputs.
         :return: True for success, False if there was an error.
@@ -191,6 +228,19 @@ class ADCset(object):
                 return False
 
     def readADC(self, chipnum=0, channel=0):
+        """
+        Reads the 12 bit value from the given channel on the given MCP3208 chip. The chipnum is used to enable one of
+        eight MCP3208 using a 74X138 3-to-8 decoder, and 'number' is the input port to read on that chip.
+
+        Communications uses the SPI bus (GPIO pins 19, 21 and 23) to talk to the MCP3208, and three GPIO pins (31, 32, 33)
+        to select the right chip using the 74X138.
+
+        Note that this function doesn't currently return valid results, and needs further work.
+
+        :param chipnum: number from 0-7 to send to the 74X138, to write the correct chip enable (see above)
+        :param channel: input channel (0-7) number on the 3208 chip to read.
+        :return: The raw 12 bit value
+        """
         with self.lock:
             self._chip_select(number=chipnum)
             chanstr = '{0:03b}'.format(channel)
@@ -201,8 +251,23 @@ class ADCset(object):
         return 256 * (r[1] & 0x1111) + r[2]
 
 
-class IO_Control(object):
+class I2C_Control(object):
+    """
+    Class to handle two devices on the I2C bus (GPIO pins 3 and 5) - the HIH7120 humidity/temperature sensor on address
+    0x27, and two PCA6416A chips to do the output power control.
+    """
     def __init__(self, instance=1):
+        """
+        Initialise the I2C bus, set the I2C address using the given chip instance number (1 or 2), and configure
+        that chip to have all pins set to outputs, without polarity inversion, and all starting out switched off.
+
+        Also initialises the 'portmap' attribute, which is a list of 16 zeroes or ones, containing the current output
+        state for each of the 16 pins.
+
+        Note - currently only chip 1 is populated.
+
+        :param instance: Chip number to address - 1 or 2
+        """
         self.lock = threading.RLock()
         self.bus = smbus.SMBus(1)
         if instance == 1:
@@ -222,14 +287,23 @@ class IO_Control(object):
     def _write_outputs(self, p1=0, p2=0):
         """
         Write 8 bits of output data to each of port1 and port 2 on the given PCA6416A chip, via i2c
+
         :param p1: port 1 output data (0-255)
         :param p2: port 2 output data (0-255)
-        :return: None
+        :return: True
         """
         with self.lock:
             self.bus.write_i2c_block_data(self.address, 2, [p1, p2])  # Write 0,0 to output registers, to make sure outputs are off
+        return True
 
     def turnon(self, channel=0):
+        """
+        Given a channel number from 1-16, change the value of that bit in self.portmap to 'on', and write the complete
+        state (all bits) of self.portmap to the 6416 chip.
+
+        :param channel: Channel number from 1-16
+        :return: False if there was an error, True otherwise.
+        """
         if type(channel) not in [int, long]:
             logger.error('Channel number must be an int from 1-16, not %s' % channel)
             return False
@@ -242,8 +316,16 @@ class IO_Control(object):
             p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
             self._write_outputs(p1=p1, p2=p2)
+        return True
 
     def turnoff(self, channel=0):
+        """
+        Given a channel number from 1-16, change the value of that bit in self.portmap to 'off', and write the complete
+        state (all bits) of self.portmap to the 6416 chip.
+
+        :param channel: Channel number from 1-16
+        :return: False if there was an error, True otherwise.
+        """
         if type(channel) not in [int, long]:
             logger.error('Channel number must be an int from 1-16, not %s' % channel)
             return False
@@ -256,8 +338,15 @@ class IO_Control(object):
             p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
             self._write_outputs(p1=p1, p2=p2)
+        return True
 
     def read_environment(self):
+        """
+        Reads the HIH7120 humidity/temperature sensor, and return the relative humidity as a percenteage,
+        and temperature in deg C.
+
+        :return: a tuple of (humidity, temperature)
+        """
         with self.lock:
             self.bus.write_quick(0x27)
             time.sleep(0.11)  # Wait 110ms for conversion
@@ -271,9 +360,9 @@ class IO_Control(object):
 
 if __name__ == '__main__':
     init()
-    adcs = ADCset()
-    c1 = IO_Control(instance=1)
-    c2 = IO_Control(instance=2)
+    adcs = ADC_Set()
+    c1 = I2C_Control(instance=1)
+    #  c2 = I2C_Control(instance=2)   # Not yet populated
     logger.info('Main code starting.')
     # do stuff
     # RegisterCleanup(cleanup)             # Trap signals and register the cleanup() function to be run on exit.
