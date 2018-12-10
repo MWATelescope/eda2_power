@@ -11,8 +11,22 @@ Python 2.7.13 (default, Sep 26 2018, 18:42:22)
 [GCC 6.3.0 20170516] on linux2
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import eda2
->>> adcs = eda2.ADC_Set()
->>> c1 = eda2.I2C_Control(instance=1)
+>>> eda2.init()    # Initialise pins
+>>> adcs = eda2.ADC_Set()   # Create an object to handle the 74X138 and the MCP3208 comms
+>>> c1 = eda2.I2C_Control(instance=1)  # Create an object to handle I2C comms
+>>> c1.read_environment()         # Reads the humidity and temperature
+(50.872909290684895, 22.235075082407526)
+>>> c1.turn_all_on()    # Turn on all of the 6416 outputs
+True
+>>> c1.turn_all_off()    # Turn off all of the 6416 outputs
+True
+>>> adcs._chip_select(4)   # Enable the chip select line CS-X1 (active low) to IC13
+INFO: time 1544422543.492386 - Selected output 4 on 74X138
+True
+>>> adcs._chip_select(None)   # Disable all the CS-X chip select lines
+INFO: time 1544422551.228194 - Disabled all outputs on 74X138
+True
+>>>
 
 
 """
