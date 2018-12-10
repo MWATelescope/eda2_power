@@ -257,6 +257,17 @@ class IO_Control(object):
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
             self._write_outputs(p1=p1, p2=p2)
 
+    def read_environment(self):
+        with self.lock:
+            self.bus.write_quick(0x27)
+            time.sleep(0.11)  # Wait 110ms for conversion
+            data = self.bus.read_i2c_block(0x27, 0, 4)
+        h_raw = (data[0] & 63) * 256 + data[1]
+        humidity = h_raw / 16382.0 * 100.0
+        t_raw = (data[0] * 256 + data[1])
+        temperature = t_raw / 16382.0 * 165 - 40
+        return humidity, temperature
+
 
 if __name__ == '__main__':
     init()
