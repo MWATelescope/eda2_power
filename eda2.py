@@ -260,12 +260,15 @@ class ADC_Set(object):
         """
         with self.lock:
             self._chip_select(number=chipnum)
+            time.sleep(0.01)
             chanstr = '{0:03b}'.format(channel)
             d2, d1, d0 = int(chanstr[-3]), int(chanstr[-2]), int(chanstr[-1])
             cmd = [(0x6 | d2), (d1 << 7) | (d0 << 6), 0]
+            print "Sending: ", cmd
             r = self.spi.xfer2(cmd)   # Returns three bytes - the first is 0, the second and third are 0000XXXX, and XXXXXXXX
             self._chip_select(number=None)
-        return 256 * (r[1] & 0x1111) + r[2]
+        return r
+        # return 256 * (r[1] & 0x1111) + r[2]
 
 
 class I2C_Control(object):
