@@ -195,6 +195,8 @@ class ADC_Set(object):
         """
         self.spi = spidev.SpiDev()
         self.spi.open(0, 0)
+        self.spi.no_cs = True
+        self.spi.max_speed_hz = 10000
         self.lock = threading.RLock()
 
     def _chip_select(self, number=None):
@@ -267,8 +269,7 @@ class ADC_Set(object):
             print "Sending: ", cmd
             r = self.spi.xfer2(cmd)   # Returns three bytes - the first is 0, the second and third are 0000XXXX, and XXXXXXXX
             self._chip_select(number=None)
-        return r
-        # return 256 * (r[1] & 0x1111) + r[2]
+        return 256 * (r[1] & 0x1111) + r[2]
 
 
 class I2C_Control(object):
