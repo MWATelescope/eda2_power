@@ -269,7 +269,7 @@ class ADC_Set(object):
             print "Sending: ", cmd
             r = self.spi.xfer2(cmd)   # Returns three bytes - the first is 0, the second and third are 0000XXXX, and XXXXXXXX
             self._chip_select(number=None)
-        return 256 * (r[1] & 0x1111) + r[2]
+        return 256 * (r[1] & 0b1111) + r[2]
 
 
 class I2C_Control(object):
