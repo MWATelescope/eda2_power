@@ -18,16 +18,28 @@ Type "help", "copyright", "credits" or "license" for more information.
 (50.872909290684895, 22.235075082407526)
 >>> c1.turn_all_on()    # Turn on all of the 6416 outputs
 True
+>>> adcs.readADC(chipnum=4, channel=4)  # Read VB7
+INFO: time 1546998908.272304 - Selected output 4 on 74X138
+Sending:  [7, 0, 0]
+INFO: time 1546998908.286555 - Disabled all outputs on 74X138
+455
+>>> adcs.readADC(chipnum=4, channel=5)  # Read IB7
+INFO: time 1546998911.022609 - Selected output 4 on 74X138
+Sending:  [7, 64, 0]
+INFO: time 1546998911.036595 - Disabled all outputs on 74X138
+1379
+>>> adcs.readADC(chipnum=4, channel=6)  # Read VB8
+INFO: time 1546998912.918866 - Selected output 4 on 74X138
+Sending:  [7, 128, 0]
+INFO: time 1546998912.932822 - Disabled all outputs on 74X138
+456
+>>> adcs.readADC(chipnum=4, channel=7)  # Read IB8
+INFO: time 1546998914.782761 - Selected output 4 on 74X138
+Sending:  [7, 192, 0]
+INFO: time 1546998914.796718 - Disabled all outputs on 74X138
+1388
 >>> c1.turn_all_off()    # Turn off all of the 6416 outputs
 True
->>> adcs._chip_select(4)   # Enable the chip select line CS-X1 (active low) to IC13
-INFO: time 1544422543.492386 - Selected output 4 on 74X138
-True
->>> adcs._chip_select(None)   # Disable all the CS-X chip select lines
-INFO: time 1544422551.228194 - Disabled all outputs on 74X138
-True
->>>
-
 
 """
 
