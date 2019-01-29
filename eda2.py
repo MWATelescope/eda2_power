@@ -509,8 +509,8 @@ class Antenna(object):
     def sense(self):
         """Returns a tuple of (voltage, current) in Volts and Amps respectively
         """
-        v_raw = ADCS.ReadADC(chipnum=self.chipnum, channel=self.v_chan)
-        i_raw = ADCS.ReadADC(chipnum=self.chipnum, channel=self.i_chan)
+        v_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.v_chan)
+        i_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.i_chan)
         # TODO - scale voltage and current
         return v_raw, i_raw
 
