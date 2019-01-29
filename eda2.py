@@ -502,9 +502,9 @@ class Antenna(object):
     def __repr__(self):
         v, i = self.sense()
         if self.ison():
-            return '<%s:  ON: %7.3f V, %5.3f mA>' % (self.name, v, i)
+            return '<%s:  ON: %6.3f V, %6.3f mA>' % (self.name, v, i)
         else:
-            return '<%s: OFF: %7.3f V, %5.3f mA>' % (self.name, v, i)
+            return '<%s: OFF: %6.3f V, %6.3f mA>' % (self.name, v, i)
 
 
 if __name__ == '__main__':
