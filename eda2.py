@@ -32,6 +32,11 @@ Type "help", "copyright", "credits" or "license" for more information.
 (48.310546875, 51.26953125)
 >>> a7.turnoff()
 >>> a8.turnoff()
+>>> eda2.turn_all_on()            # Turn on every single output
+>>> print eda2.OUTPUTS['C7']      # Look at the sensors on port C7
+<C7:  ON: 48.486 V, 51.270 mA>
+>>> eda2.turn_all_off()           # Turn OFF every single output
+>>>
 
 
 """
@@ -54,7 +59,7 @@ import spidev
 
 LOGLEVEL_CONSOLE = logging.WARNING  # INFO and above will be printed to STDOUT as well as the logfile
 LOGLEVEL_LOGFILE = logging.DEBUG  # All messages will be sent to the log file
-LOGFILE = "/tmp/bfif.log"
+LOGFILE = "/tmp/eda2.log"
 
 ADCS = None    # When running, contains the ADCSet instance that handles all the ADC chips.
 PC1 = None      # When running, contains an I2C_Control instance to control the first output control chip
@@ -189,6 +194,8 @@ def cleanup():
             SMBUS.close()
     except:
         logger.exception('cleanup() - FAILED to cleanup GPIO pins and close I2C bus. : %s', traceback.format_exc())
+
+    logger.info('cleanup() finished, exiting.')
 
 
 def SignalHandler(signum=None, frame=None):
@@ -518,6 +525,8 @@ def turn_all_off():
 
 if __name__ == '__main__':
     init()
+    RegisterCleanup(cleanup)  # Trap signals and register the cleanup() function to be run on exit.
+
     logger.info('Main code starting.')
     for letter in 'ABCD':
         for number in '12345678':
@@ -528,6 +537,5 @@ if __name__ == '__main__':
             OUTPUTS[name].turnoff()
             time.sleep(0.1)
 
-    cleanup()
     # do stuff
     # RegisterCleanup(cleanup)             # Trap signals and register the cleanup() function to be run on exit.
