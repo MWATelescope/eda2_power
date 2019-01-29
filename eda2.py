@@ -14,6 +14,24 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> eda2.init()    # Initialise pins
 >>> eda2.read_environment()         # Reads the humidity and temperature
 (50.872909290684895, 22.235075082407526)
+>>> a7 = eda2.OUTPUTS['A7']   # Create a variable called a7, that contains the output control object for port A7
+>>> a8 = eda2.OUTPUTS['A8']   # Create a variable called a8, that contains the output control object for port A8
+>>> print a7
+<A7: OFF:  0.249 V,  0.000 mA>
+>>> print a8
+<A8: OFF:  0.264 V,  0.488 mA>
+>>> a7.turnon()
+>>> a8.turnon()
+>>> print a7
+<A7:  ON: 48.354 V, 51.270 mA>
+>>> a7.sense()
+(48.3984375, 51.7578125)
+>>> print a8
+<A8:  ON: 48.354 V, 51.270 mA>
+>>> a8.sense()
+(48.310546875, 51.26953125)
+>>> a7.turnoff()
+>>> a8.turnoff()
 
 
 """
@@ -485,7 +503,7 @@ def read_environment():
 def turn_all_on():
     """Turn on all the outputs.
     """
-    for output in OUTPUTS:
+    for output in OUTPUTS.values():
         output.turnon()
         time.sleep(0.05)
 
@@ -493,7 +511,7 @@ def turn_all_on():
 def turn_all_off():
     """Turn off all the outputs.
     """
-    for output in OUTPUTS:
+    for output in OUTPUTS.values():
         output.turnoff()
         time.sleep(0.05)
 
