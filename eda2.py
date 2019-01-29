@@ -510,12 +510,13 @@ if __name__ == '__main__':
     init()
     logger.info('Main code starting.')
     for letter in 'ABCD':
-        for number in '12345678':
+        for number in '5678':
             name = '%s%s' % (letter, number)
             OUTPUTS[name].turnon()
-            time.sleep(0.1)
+            time.sleep(1.0)
             print name, OUTPUTS[name].sense()
             OUTPUTS[name].turnoff()
+            time.sleep(0.1)
 
     cleanup()
     # do stuff
