@@ -469,6 +469,7 @@ class Antenna(object):
     """
 
     def __init__(self, name):
+        self.name = name
         assert (type(name) == str) and (len(name) == 2)
         assert name.upper() in CHIPMAP
         if name[0].upper() == 'A':
@@ -508,9 +509,9 @@ class Antenna(object):
     def __repr__(self):
         v, i = self.sense()
         if self.ison():
-            return '<%s:  ON: %6.3f V, %5.3f mA>' % (v, i)
+            return '<%s:  ON: %6.3f V, %5.3f mA>' % (self.name, v, i)
         else:
-            return '<%s: OFF: %6.3f V, %5.3f mA>' % (v, i)
+            return '<%s: OFF: %6.3f V, %5.3f mA>' % (self.name, v, i)
 
 
 if __name__ == '__main__':
