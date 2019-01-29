@@ -508,9 +508,9 @@ class Antenna(object):
     def __repr__(self):
         v, i = self.sense()
         if self.ison():
-            return '<%s:  ON: %6.3f V, %5.3f mA>'
+            return '<%s:  ON: %6.3f V, %5.3f mA>' % (v, i)
         else:
-            return '<%s: OFF: %6.3f V, %5.3f mA>'
+            return '<%s: OFF: %6.3f V, %5.3f mA>' % (v, i)
 
 
 if __name__ == '__main__':
@@ -520,7 +520,7 @@ if __name__ == '__main__':
         for number in '5678':
             name = '%s%s' % (letter, number)
             OUTPUTS[name].turnon()
-            time.sleep(1.0)
+            time.sleep(0.1)
             print OUTPUTS[name]
             OUTPUTS[name].turnoff()
             time.sleep(0.1)
