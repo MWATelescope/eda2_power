@@ -521,7 +521,7 @@ if __name__ == '__main__':
             name = '%s%s' % (letter, number)
             OUTPUTS[name].turnon()
             time.sleep(1.0)
-            print name, OUTPUTS[name].sense()
+            print OUTPUTS[name]
             OUTPUTS[name].turnoff()
             time.sleep(0.1)
 
