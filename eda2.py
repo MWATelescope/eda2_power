@@ -64,6 +64,39 @@ LOGLEVEL_LOGFILE = logging.DEBUG  # All messages will be sent to the log file
 LOGLEVEL_REMOTE = logging.INFO  # INFO and above will be sent to the local syslog daemon (which can then formward them over the network)
 LOGFILE = "/tmp/bfif.log"
 
+ADCS = None    # When running, contains the ADCSet instance that handles all the ADC chips.
+PC1 = None      # When running, contains an I2C_Control instance to control the first output control chip
+PC2 = None      # When running, contains an I2C_Control instance to control the second output control chip
+SMBUS = None    # When running, contains an smbus.SMBus instance to talk to the I2C bus
+
+# When running, OUTPUTS contains a dictionary with 32 Antenna() instances, with the key being the
+# output name - A1-A8, B1-B8, ... D1-D8.
+OUTPUTS = {}
+
+I2C_LOCK = threading.RLock()   # Used to prevent simultaneous use of the I2C bus by multiple threads.
+
+# Key is antenna name, value is a tuple containing (chipselect, voltage_channel, current_channel)
+CHIPMAP = {'A1':(7, 0, 1), 'A2':(7, 2, 3),
+           'A3':(6, 0, 1), 'A4':(6, 2, 3),
+           'A5':(5, 0, 1), 'A6':(5, 2, 3),
+           'A7':(4, 0, 1), 'A8':(4, 2, 3),
+
+           'B1':(7, 4, 5), 'B2':(7, 6, 7),
+           'B3':(6, 4, 5), 'B4':(6, 6, 7),
+           'B5':(5, 4, 5), 'B6':(5, 6, 7),
+           'B7':(4, 4, 5), 'B8':(4, 6, 7),
+
+           'C1':(0, 0, 1), 'C2':(0, 2, 3),
+           'C3':(1, 0, 1), 'C4':(1, 2, 3),
+           'C5':(2, 0, 1), 'C6':(2, 2, 3),
+           'C7':(3, 0, 1), 'C8':(3, 2, 3),
+
+           'D1':(0, 4, 5), 'D2':(0, 6, 7),
+           'D3':(1, 4, 5), 'D4':(1, 6, 7),
+           'D5':(2, 4, 5), 'D6':(2, 6, 7),
+           'D7':(3, 4, 5), 'D8':(3, 6, 7),
+           }
+
 
 class MWALogFormatter(object):
     def format(self, record):
@@ -107,15 +140,23 @@ ADDRESS_HIH7120 = 0x27   # Honeywell humidity/temperature sensor I2C address
 
 def init():
     """
-      Initialise IO pins for power/enable control with all 8 beamformers,
-      and create the global STATUS object.
+      Initialise IO pins, and create the global control object instances.
     """
+    global ADCS, PC1, PC2, SMBUS
     GPIO.setmode(GPIO.BOARD)  # Use board connector pin numbers to specify I/O pins
     GPIO.setwarnings(False)
     GPIO.setup(CS_DECODE_A, GPIO.OUT)
     GPIO.setup(CS_DECODE_B, GPIO.OUT)
     GPIO.setup(CS_DECODE_C, GPIO.OUT)
     GPIO.setup(CS_DECODE_ENABLE, GPIO.OUT)
+    SMBUS = smbus.SMBus(1)
+    ADCS = ADC_Set()
+    PC1 = I2C_Control(instance=1)
+    PC2 = I2C_Control(instance=2)
+    for letter in ['A', 'B', 'C', 'D']:
+        for number in range(1, 9):
+            name = '%s%d' % (letter, number)
+            OUTPUTS[name] = Antenna(name=name)
 
 
 ##################################################################################
@@ -139,9 +180,16 @@ def cleanup():
     # the SPIU lock or some other problem with the SPIUHandler() code.
 
     try:
-        pass  # do cleanup stuff
+        if PC1 is not None:
+            PC1.turn_all_off()
     except:
-        pass
+        logger.exception('cleanup() - FAILED to turn off PC1 outputs on cleanup. : %s', traceback.format_exc())
+
+    try:
+        if PC2 is not None:
+            PC2.turn_all_off()
+    except:
+        logger.exception('cleanup() - FAILED to turn off PC2 outputs on cleanup. : %s', traceback.format_exc())
 
     try:
         try:
@@ -149,6 +197,9 @@ def cleanup():
         except:
             pass
 
+        GPIO.cleanup()
+        if SMBUS is not None:
+            SMBUS.close()
     except:
         logger.exception('cleanup() - FAILED to do cleanup stuff. : %s', traceback.format_exc())
 
@@ -194,6 +245,24 @@ def RegisterCleanup(func):
     # Register the passed CLEANUP_FUNCTION to be called on
     # on normal programme exit, with no arguments.
     atexit.register(CLEANUP_FUNCTION)
+
+
+def read_environment():
+    """
+    Reads the the HIH7120 humidity/temperature sensor on address 0x27, and return the relative humidity as a percenteage,
+    and the temperature in deg C.
+
+    :return: a tuple of (humidity, temperature)
+    """
+    with I2C_LOCK:
+        SMBUS.write_quick(0x27)
+        time.sleep(0.11)  # Wait 110ms for conversion
+        data = SMBUS.read_i2c_block_data(0x27, 0, 4)
+    h_raw = (data[0] & 63) * 256 + data[1]
+    humidity = h_raw / 16382.0 * 100.0
+    t_raw = (data[0] * 256 + data[1]) / 4
+    temperature = t_raw / 16382.0 * 165 - 40
+    return humidity, temperature
 
 
 class ADC_Set(object):
@@ -286,8 +355,7 @@ class ADC_Set(object):
 
 class I2C_Control(object):
     """
-    Class to handle two devices on the I2C bus (GPIO pins 3 and 5) - the HIH7120 humidity/temperature sensor on address
-    0x27, and two PCA6416A chips to do the output power control.
+    Class to handle the two PCA6416A chips on the I2C bus (GPIO pins 3 and 5) to do the output power control.
     """
     def __init__(self, instance=1):
         """
@@ -301,8 +369,6 @@ class I2C_Control(object):
 
         :param instance: Chip number to address - 1 or 2
         """
-        self.lock = threading.RLock()
-        self.bus = smbus.SMBus(1)
         if instance == 1:
             self.address = ADDRESS7_PCA6416A_1
         elif instance == 2:
@@ -312,10 +378,10 @@ class I2C_Control(object):
             return
 
         self.portmap = [0] * 16  # Defaults to all outputs off.
-        with self.lock:
-            self.bus.write_i2c_block_data(self.address, 2, [0, 0])  # Write 0,0 to output registers, to make sure outputs are off
-            self.bus.write_i2c_block_data(self.address, 4, [0, 0])  # Write 0,0 to polarity inversion register, for no inversion
-            self.bus.write_i2c_block_data(self.address, 6, [0, 0])  # Write 0,0 to configuration register, to set pins to outputs
+        with I2C_LOCK:
+            SMBUS.write_i2c_block_data(self.address, 2, [0, 0])  # Write 0,0 to output registers, to make sure outputs are off
+            SMBUS.write_i2c_block_data(self.address, 4, [0, 0])  # Write 0,0 to polarity inversion register, for no inversion
+            SMBUS.write_i2c_block_data(self.address, 6, [0, 0])  # Write 0,0 to configuration register, to set pins to outputs
 
     def _write_outputs(self, p1=0, p2=0):
         """
@@ -325,8 +391,8 @@ class I2C_Control(object):
         :param p2: port 2 output data (0-255)
         :return: True
         """
-        with self.lock:
-            self.bus.write_i2c_block_data(self.address, 2, [p1, p2])  # Write 0,0 to output registers, to make sure outputs are off
+        with I2C_LOCK:
+            SMBUS.write_i2c_block_data(self.address, 2, [p1, p2])  # Write 0,0 to output registers, to make sure outputs are off
         return True
 
     def turnon(self, channel=0):
@@ -344,7 +410,7 @@ class I2C_Control(object):
             logger.error('Channel number must be an int from 1-16, not %d' % channel)
             return False
 
-        with self.lock:
+        with I2C_LOCK:   # Get the lock before we start actually using the I2C bus, because we are changing instance data
             self.portmap[channel - 1] = 1
             p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
@@ -366,7 +432,7 @@ class I2C_Control(object):
             logger.error('Channel number must be an int from 1-16, not %d' % channel)
             return False
 
-        with self.lock:
+        with I2C_LOCK:   # Get the lock before we start actually using the I2C bus, because we are changing instance data
             self.portmap[channel - 1] = 0
             p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
@@ -380,7 +446,7 @@ class I2C_Control(object):
         :return: False if there was an error, True otherwise.
         """
         # TODO - loop over them all with a short delay, to reduce switching transients.
-        with self.lock:
+        with I2C_LOCK:    # Get the lock before we start actually using the I2C bus, because we are changing instance data
             self.portmap = [1] * 16
             p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
@@ -394,38 +460,63 @@ class I2C_Control(object):
         :return: False if there was an error, True otherwise.
         """
         # TODO - loop over them all with a short delay, to reduce switching transients.
-        with self.lock:
+        with I2C_LOCK:    # Get the lock before we start actually using the I2C bus, because we are changing instance data
             self.portmap = [0] * 16
             p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
             self._write_outputs(p1=p1, p2=p2)
         return True
 
-    # TODO - this will need to change, as there will be two of these instances for the two 6416 chips, but there's
-    # only one HIH7120 chip.
-    def read_environment(self):
-        """
-        Reads the HIH7120 humidity/temperature sensor, and return the relative humidity as a percenteage,
-        and temperature in deg C.
 
-        :return: a tuple of (humidity, temperature)
+class Antenna(object):
+    """
+    Class to represent one antenna power outlet. It can be turned on or off, and its voltage
+    and current can be measured.
+
+    Names are two characters, one of A1-A8, B1-B8, C1-C8 or D1-D8. The name is used to determine
+    the chip select and ADC channel numbers to use for power control and sense measurements.
+    """
+
+    def __init__(self, name):
+        assert (type(name) == str) and (len(name) == 2)
+        assert name.upper in CHIPMAP
+        if name[0].upper() == 'A':
+            self.pcontrol = PC1
+            self.con_chan = int(name[1])
+        elif name[0].upper() == 'B':
+            self.pcontrol = PC1
+            self.con_chan = int(name[1]) + 8
+        elif name[0].upper() == 'C':
+            self.pcontrol = PC2
+            self.con_chan = int(name[1])
+        elif name[0].upper() == 'D':
+            self.pcontrol = PC2
+            self.con_chan = int(name[1]) + 8
+        self.chipnum, self.v_chan, self.i_chan = CHIPMAP[name]
+        self._poweron = False
+
+    def turnon(self):
+        self.pcontrol.turnon(self.con_chan)
+        self._poweron = True
+
+    def turnoff(self):
+        self.pcontrol.turnoff(self.con_chan)
+        self._poweron = False
+
+    def ison(self):
+        return self._poweron
+
+    def sense(self):
+        """Returns a tuple of (voltage, current) in Volts and Amps respectively
         """
-        with self.lock:
-            self.bus.write_quick(0x27)
-            time.sleep(0.11)  # Wait 110ms for conversion
-            data = self.bus.read_i2c_block_data(0x27, 0, 4)
-        h_raw = (data[0] & 63) * 256 + data[1]
-        humidity = h_raw / 16382.0 * 100.0
-        t_raw = (data[0] * 256 + data[1]) / 4
-        temperature = t_raw / 16382.0 * 165 - 40
-        return humidity, temperature
+        v_raw = ADCS.ReadADC(chipnum=self.chipnum, channel=self.v_chan)
+        i_raw = ADCS.ReadADC(chipnum=self.chipnum, channel=self.i_chan)
+        # TODO - scale voltage and current
+        return v_raw, i_raw
 
 
 if __name__ == '__main__':
     init()
-    adcs = ADC_Set()
-    c1 = I2C_Control(instance=1)
-    #  c2 = I2C_Control(instance=2)   # Not yet populated
     logger.info('Main code starting.')
     # do stuff
     # RegisterCleanup(cleanup)             # Trap signals and register the cleanup() function to be run on exit.
