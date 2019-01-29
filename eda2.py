@@ -479,7 +479,7 @@ class Antenna(object):
 
     def __init__(self, name):
         assert (type(name) == str) and (len(name) == 2)
-        assert name.upper in CHIPMAP
+        assert name.upper() in CHIPMAP
         if name[0].upper() == 'A':
             self.pcontrol = PC1
             self.con_chan = int(name[1])
