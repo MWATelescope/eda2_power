@@ -75,25 +75,25 @@ OUTPUTS = {}
 I2C_LOCK = threading.RLock()   # Used to prevent simultaneous use of the I2C bus by multiple threads.
 
 # Key is antenna name, value is a tuple containing (chipselect, voltage_channel, current_channel)
-CHIPMAP = {'A1':(7, 0, 1), 'A2':(7, 2, 3),
-           'A3':(6, 0, 1), 'A4':(6, 2, 3),
-           'A5':(5, 0, 1), 'A6':(5, 2, 3),
-           'A7':(4, 0, 1), 'A8':(4, 2, 3),
+CHIPMAP = {'A1':(10, 7, 0, 1), 'A2':( 9, 7, 2, 3),
+           'A3':( 2, 6, 0, 1), 'A4':( 1, 6, 2, 3),
+           'A5':(10, 5, 0, 1), 'A6':( 9, 5, 2, 3),
+           'A7':( 2, 4, 0, 1), 'A8':( 1, 4, 2, 3),
 
-           'B1':(7, 4, 5), 'B2':(7, 6, 7),
-           'B3':(6, 4, 5), 'B4':(6, 6, 7),
-           'B5':(5, 4, 5), 'B6':(5, 6, 7),
-           'B7':(4, 4, 5), 'B8':(4, 6, 7),
+           'B1':(12, 7, 4, 5), 'B2':(11, 7, 6, 7),
+           'B3':( 4, 6, 4, 5), 'B4':( 3, 6, 6, 7),
+           'B5':(12, 5, 4, 5), 'B6':(11, 5, 6, 7),
+           'B7':( 4, 4, 4, 5), 'B8':( 3, 4, 6, 7),
 
-           'C1':(0, 0, 1), 'C2':(0, 2, 3),
-           'C3':(1, 0, 1), 'C4':(1, 2, 3),
-           'C5':(2, 0, 1), 'C6':(2, 2, 3),
-           'C7':(3, 0, 1), 'C8':(3, 2, 3),
+           'C1':(14, 0, 0, 1), 'C2':(13, 0, 2, 3),
+           'C3':( 6, 1, 0, 1), 'C4':( 5, 1, 2, 3),
+           'C5':(14, 2, 0, 1), 'C6':(13, 2, 2, 3),
+           'C7':( 6, 3, 0, 1), 'C8':( 5, 3, 2, 3),
 
-           'D1':(0, 4, 5), 'D2':(0, 6, 7),
-           'D3':(1, 4, 5), 'D4':(1, 6, 7),
-           'D5':(2, 4, 5), 'D6':(2, 6, 7),
-           'D7':(3, 4, 5), 'D8':(3, 6, 7),
+           'D1':(16, 0, 4, 5), 'D2':(15, 0, 6, 7),
+           'D3':( 8, 1, 4, 5), 'D4':( 7, 1, 6, 7),
+           'D5':(16, 2, 4, 5), 'D6':(15, 2, 6, 7),
+           'D7':( 8, 3, 4, 5), 'D8':( 7, 3, 6, 7),
            }
 
 
@@ -472,19 +472,12 @@ class Antenna(object):
         self.name = name
         assert (type(name) == str) and (len(name) == 2)
         assert name.upper() in CHIPMAP
-        if name[0].upper() == 'A':
+        self.con_chan, self.chipnum, self.v_chan, self.i_chan = CHIPMAP[name]
+        if int(name[1]) > 4:
             self.pcontrol = PC1
-            self.con_chan = (9 - int(name[1]))
-        elif name[0].upper() == 'B':
-            self.pcontrol = PC1
-            self.con_chan = (17 - int(name[1]))
-        elif name[0].upper() == 'C':
+        else:
             self.pcontrol = PC2
-            self.con_chan = (9 - int(name[1]))
-        elif name[0].upper() == 'D':
-            self.pcontrol = PC2
-            self.con_chan = (17 - int(name[1]))
-        self.chipnum, self.v_chan, self.i_chan = CHIPMAP[name]
+
         self._poweron = False
 
     def turnon(self):
