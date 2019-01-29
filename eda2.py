@@ -59,9 +59,8 @@ import spidev
 
 # set up the logging before importing Pyro4
 
-LOGLEVEL_CONSOLE = logging.INFO  # INFO and above will be printed to STDOUT as well as the logfile
+LOGLEVEL_CONSOLE = logging.WARNING  # INFO and above will be printed to STDOUT as well as the logfile
 LOGLEVEL_LOGFILE = logging.DEBUG  # All messages will be sent to the log file
-LOGLEVEL_REMOTE = logging.INFO  # INFO and above will be sent to the local syslog daemon (which can then formward them over the network)
 LOGFILE = "/tmp/bfif.log"
 
 ADCS = None    # When running, contains the ADCSet instance that handles all the ADC chips.
@@ -192,18 +191,11 @@ def cleanup():
         logger.exception('cleanup() - FAILED to turn off PC2 outputs on cleanup. : %s', traceback.format_exc())
 
     try:
-        try:
-            pass  # more cleanup stuff
-        except:
-            pass
-
         GPIO.cleanup()
         if SMBUS is not None:
             SMBUS.close()
     except:
-        logger.exception('cleanup() - FAILED to do cleanup stuff. : %s', traceback.format_exc())
-
-    logger.critical('cleanup() - finished.')
+        logger.exception('cleanup() - FAILED to cleanup GPIO pins and close I2C bus. : %s', traceback.format_exc())
 
 
 def SignalHandler(signum=None, frame=None):
@@ -347,7 +339,6 @@ class ADC_Set(object):
             chanstr = '{0:03b}'.format(channel)
             d2, d1, d0 = int(chanstr[-3]), int(chanstr[-2]), int(chanstr[-1])
             cmd = [(0x6 | d2), (d1 << 7) | (d0 << 6), 0]
-            print "Sending: ", cmd
             r = self.spi.xfer2(cmd)   # Returns three bytes - the first is 0, the second and third are 0000XXXX, and XXXXXXXX
             self._chip_select(number=None)
         return 256 * (r[1] & 0b1111) + r[2]
@@ -518,5 +509,14 @@ class Antenna(object):
 if __name__ == '__main__':
     init()
     logger.info('Main code starting.')
+    for letter in 'ABCD':
+        for number in '12345678':
+            name = '%s%s' % (letter, number)
+            OUTPUTS[name].turnon()
+            time.sleep(0.1)
+            print name, OUTPUTS[name].sense()
+            OUTPUTS[name].turnoff()
+
+    cleanup()
     # do stuff
     # RegisterCleanup(cleanup)             # Trap signals and register the cleanup() function to be run on exit.
