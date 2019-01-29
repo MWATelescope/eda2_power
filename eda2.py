@@ -12,34 +12,9 @@ Python 2.7.13 (default, Sep 26 2018, 18:42:22)
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import eda2
 >>> eda2.init()    # Initialise pins
->>> adcs = eda2.ADC_Set()   # Create an object to handle the 74X138 and the MCP3208 comms
->>> c1 = eda2.I2C_Control(instance=1)  # Create an object to handle I2C comms
->>> c1.read_environment()         # Reads the humidity and temperature
+>>> eda2.read_environment()         # Reads the humidity and temperature
 (50.872909290684895, 22.235075082407526)
->>> c1.turn_all_on()    # Turn on all of the 6416 outputs
-True
->>> adcs.readADC(chipnum=4, channel=4)  # Read VB7
-INFO: time 1546998908.272304 - Selected output 4 on 74X138
-Sending:  [7, 0, 0]
-INFO: time 1546998908.286555 - Disabled all outputs on 74X138
-455
->>> adcs.readADC(chipnum=4, channel=5)  # Read IB7
-INFO: time 1546998911.022609 - Selected output 4 on 74X138
-Sending:  [7, 64, 0]
-INFO: time 1546998911.036595 - Disabled all outputs on 74X138
-1379
->>> adcs.readADC(chipnum=4, channel=6)  # Read VB8
-INFO: time 1546998912.918866 - Selected output 4 on 74X138
-Sending:  [7, 128, 0]
-INFO: time 1546998912.932822 - Disabled all outputs on 74X138
-456
->>> adcs.readADC(chipnum=4, channel=7)  # Read IB8
-INFO: time 1546998914.782761 - Selected output 4 on 74X138
-Sending:  [7, 192, 0]
-INFO: time 1546998914.796718 - Disabled all outputs on 74X138
-1388
->>> c1.turn_all_off()    # Turn off all of the 6416 outputs
-True
+
 
 """
 
@@ -237,24 +212,6 @@ def RegisterCleanup(func):
     # Register the passed CLEANUP_FUNCTION to be called on
     # on normal programme exit, with no arguments.
     atexit.register(CLEANUP_FUNCTION)
-
-
-def read_environment():
-    """
-    Reads the the HIH7120 humidity/temperature sensor on address 0x27, and return the relative humidity as a percenteage,
-    and the temperature in deg C.
-
-    :return: a tuple of (humidity, temperature)
-    """
-    with I2C_LOCK:
-        SMBUS.write_quick(0x27)
-        time.sleep(0.11)  # Wait 110ms for conversion
-        data = SMBUS.read_i2c_block_data(0x27, 0, 4)
-    h_raw = (data[0] & 63) * 256 + data[1]
-    humidity = h_raw / 16382.0 * 100.0
-    t_raw = (data[0] * 256 + data[1]) / 4
-    temperature = t_raw / 16382.0 * 165 - 40
-    return humidity, temperature
 
 
 class ADC_Set(object):
@@ -505,6 +462,40 @@ class Antenna(object):
             return '<%s:  ON: %6.3f V, %6.3f mA>' % (self.name, v, i)
         else:
             return '<%s: OFF: %6.3f V, %6.3f mA>' % (self.name, v, i)
+
+
+def read_environment():
+    """
+    Reads the the HIH7120 humidity/temperature sensor on address 0x27, and return the relative humidity as a percenteage,
+    and the temperature in deg C.
+
+    :return: a tuple of (humidity, temperature)
+    """
+    with I2C_LOCK:
+        SMBUS.write_quick(0x27)
+        time.sleep(0.11)  # Wait 110ms for conversion
+        data = SMBUS.read_i2c_block_data(0x27, 0, 4)
+    h_raw = (data[0] & 63) * 256 + data[1]
+    humidity = h_raw / 16382.0 * 100.0
+    t_raw = (data[0] * 256 + data[1]) / 4
+    temperature = t_raw / 16382.0 * 165 - 40
+    return humidity, temperature
+
+
+def turn_all_on():
+    """Turn on all the outputs.
+    """
+    for output in OUTPUTS:
+        output.turnon()
+        time.sleep(0.05)
+
+
+def turn_all_off():
+    """Turn off all the outputs.
+    """
+    for output in OUTPUTS:
+        output.turnoff()
+        time.sleep(0.05)
 
 
 if __name__ == '__main__':
