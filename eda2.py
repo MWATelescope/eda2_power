@@ -473,16 +473,16 @@ class Antenna(object):
         assert name.upper() in CHIPMAP
         if name[0].upper() == 'A':
             self.pcontrol = PC1
-            self.con_chan = int(name[1])
+            self.con_chan = (9 - int(name[1]))
         elif name[0].upper() == 'B':
             self.pcontrol = PC1
-            self.con_chan = int(name[1]) + 8
+            self.con_chan = (17 - int(name[1]))
         elif name[0].upper() == 'C':
             self.pcontrol = PC2
-            self.con_chan = int(name[1])
+            self.con_chan = (9 - int(name[1]))
         elif name[0].upper() == 'D':
             self.pcontrol = PC2
-            self.con_chan = int(name[1]) + 8
+            self.con_chan = (17 - int(name[1]))
         self.chipnum, self.v_chan, self.i_chan = CHIPMAP[name]
         self._poweron = False
 
@@ -498,12 +498,19 @@ class Antenna(object):
         return self._poweron
 
     def sense(self):
-        """Returns a tuple of (voltage, current) in Volts and Amps respectively
+        """Returns a tuple of (voltage, current) in Volts and milliAmps respectively
         """
         v_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.v_chan)
         i_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.i_chan)
         # TODO - scale voltage and current
-        return v_raw, i_raw
+        return 60.0 * v_raw / 4096.0, i_raw / 4.096
+
+    def __repr__(self):
+        v, i = self.sense()
+        if self.ison():
+            return '<%s:  ON: %6.3f V, %5.3f mA>'
+        else:
+            return '<%s: OFF: %6.3f V, %5.3f mA>'
 
 
 if __name__ == '__main__':
