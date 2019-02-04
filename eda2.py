@@ -412,34 +412,6 @@ class I2C_Control(object):
             self._write_outputs(p1=p1, p2=p2)
         return True
 
-    def turn_all_on(self):
-        """
-        Turn ON all the outputs for this 6416 chip.
-
-        :return: False if there was an error, True otherwise.
-        """
-        # TODO - loop over them all with a short delay, to reduce switching transients.
-        with I2C_LOCK:    # Get the lock before we start actually using the I2C bus, because we are changing instance data
-            self.portmap = [1] * 16
-            p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
-            p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
-            self._write_outputs(p1=p1, p2=p2)
-        return True
-
-    def turn_all_off(self):
-        """
-        Turn OFF all the outputs for this 6416 chip.
-
-        :return: False if there was an error, True otherwise.
-        """
-        # TODO - loop over them all with a short delay, to reduce switching transients.
-        with I2C_LOCK:    # Get the lock before we start actually using the I2C bus, because we are changing instance data
-            self.portmap = [0] * 16
-            p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
-            p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
-            self._write_outputs(p1=p1, p2=p2)
-        return True
-
 
 class Antenna(object):
     """
@@ -478,7 +450,6 @@ class Antenna(object):
         """
         v_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.v_chan)
         i_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.i_chan)
-        # TODO - scale voltage and current
         return 60.0 * v_raw / 4096.0, i_raw / 4.096
 
     def __repr__(self):
@@ -508,7 +479,7 @@ def read_environment():
 
 
 def turn_all_on():
-    """Turn on all the outputs.
+    """Turn on all the outputs, with a 50ms delay between each output.
     """
     for output in OUTPUTS.values():
         output.turnon()
@@ -516,7 +487,7 @@ def turn_all_on():
 
 
 def turn_all_off():
-    """Turn off all the outputs.
+    """Turn off all the outputs, with a 50ms delay between each output.
     """
     for output in OUTPUTS.values():
         output.turnoff()
@@ -528,14 +499,14 @@ if __name__ == '__main__':
     RegisterCleanup(cleanup)  # Trap signals and register the cleanup() function to be run on exit.
 
     logger.info('Main code starting.')
-    for letter in 'ABCD':
-        for number in '12345678':
-            name = '%s%s' % (letter, number)
-            OUTPUTS[name].turnon()
-            time.sleep(0.1)
-            print OUTPUTS[name]
-            OUTPUTS[name].turnoff()
-            time.sleep(0.1)
-
-    # do stuff
-    # RegisterCleanup(cleanup)             # Trap signals and register the cleanup() function to be run on exit.
+    while True:
+        for letter in 'ABCD':
+            for number in '12345678':
+                name = '%s%s' % (letter, number)
+                OUTPUTS[name].turnon()
+                time.sleep(0.5)
+                print OUTPUTS[name]
+                OUTPUTS[name].turnoff()
+                time.sleep(0.5)
+        logger.info('Waiting for 28 seconds')
+        time.sleep(28)
