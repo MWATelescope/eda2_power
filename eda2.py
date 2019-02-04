@@ -177,16 +177,9 @@ def cleanup():
     # the SPIU lock or some other problem with the SPIUHandler() code.
 
     try:
-        if PC1 is not None:
-            PC1.turn_all_off()
+        turn_all_off()
     except:
-        logger.exception('cleanup() - FAILED to turn off PC1 outputs on cleanup. : %s', traceback.format_exc())
-
-    try:
-        if PC2 is not None:
-            PC2.turn_all_off()
-    except:
-        logger.exception('cleanup() - FAILED to turn off PC2 outputs on cleanup. : %s', traceback.format_exc())
+        logger.exception('cleanup() - FAILED to turn off outputs on cleanup. : %s', traceback.format_exc())
 
     try:
         GPIO.cleanup()
