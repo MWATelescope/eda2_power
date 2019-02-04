@@ -57,7 +57,7 @@ import spidev
 
 # set up the logging before importing Pyro4
 
-LOGLEVEL_CONSOLE = logging.WARNING  # INFO and above will be printed to STDOUT as well as the logfile
+LOGLEVEL_CONSOLE = logging.INFO  # INFO and above will be printed to STDOUT as well as the logfile
 LOGLEVEL_LOGFILE = logging.DEBUG  # All messages will be sent to the log file
 LOGFILE = "/tmp/eda2.log"
 
@@ -272,7 +272,6 @@ class ADC_Set(object):
         if number is None:
             with self.lock:
                 GPIO.output(CS_DECODE_ENABLE, 0)
-            logger.info('Disabled all outputs on 74X138')
             return True
         else:
             if type(number) == int:
@@ -285,7 +284,6 @@ class ADC_Set(object):
                         GPIO.output(CS_DECODE_B, b)
                         GPIO.output(CS_DECODE_C, c)
                         GPIO.output(CS_DECODE_ENABLE, 1)
-                    logger.info('Selected output %d on 74X138' % number)
                     return True
                 else:
                     logger.error('Argument to chip_select must be None, or 0-7, not %d' % number)
@@ -498,7 +496,7 @@ if __name__ == '__main__':
                 name = '%s%s' % (letter, number)
                 OUTPUTS[name].turnon()
                 time.sleep(0.5)
-                print OUTPUTS[name]
+                logger.info(OUTPUTS[name])
                 OUTPUTS[name].turnoff()
                 time.sleep(0.5)
         logger.info('Waiting for 28 seconds')
