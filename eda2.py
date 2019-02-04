@@ -494,5 +494,5 @@ if __name__ == '__main__':
                 logger.info(OUTPUTS[name])
                 OUTPUTS[name].turnoff()
                 time.sleep(0.5)
-        logger.info('Waiting for 28 seconds')
-        time.sleep(28)
+        logger.info('Waiting for 24 seconds')
+        time.sleep(24)
