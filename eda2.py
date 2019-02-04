@@ -59,7 +59,7 @@ import spidev
 
 LOGLEVEL_CONSOLE = logging.INFO  # INFO and above will be printed to STDOUT as well as the logfile
 LOGLEVEL_LOGFILE = logging.DEBUG  # All messages will be sent to the log file
-LOGFILE = "/var/log/eda2.log"
+LOGFILE = "/var/log/eda2/eda2.log"
 
 ADCS = None    # When running, contains the ADCSet instance that handles all the ADC chips.
 PC1 = None      # When running, contains an I2C_Control instance to control the first output control chip
