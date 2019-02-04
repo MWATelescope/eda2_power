@@ -95,12 +95,7 @@ CHIPMAP = {'A1':(10, 7, 0, 1), 'A2':( 9, 7, 2, 3),
            }
 
 
-class MWALogFormatter(object):
-    def format(self, record):
-        return "%s: time %10.6f - %s" % (record.levelname, time.time(), record.getMessage())
-
-
-mwalf = MWALogFormatter()
+mwalf = logging.Formatter(fmt="%(asctime)s - %(levelname)s: %(message)s")
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
