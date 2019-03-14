@@ -44,6 +44,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 import atexit
 import logging
 from logging import handlers
+import optparse
 import signal
 import sys
 import threading
@@ -54,6 +55,16 @@ import RPi.GPIO as GPIO
 import smbus
 
 import spidev
+
+USAGE = """
+EDA2 power controller.
+Use with no arguments to turn on all outputs, and wait forever. On exit (eg, with ^C), all
+outputs will be turned off again.
+
+Use the --rfi flag to go into RFI test mode instead - each of the 32 outputs in turn will be
+turned on for ~0.5 seconds, then off for ~0.5 seconds. After all 32 outputs have been
+turned on and off, the system will wait for 24 seconds with all outputs off, then start the
+cycle again."""
 
 # set up the logging before importing Pyro4
 
@@ -480,19 +491,46 @@ def turn_all_off():
         time.sleep(0.05)
 
 
-if __name__ == '__main__':
-    init()
-    RegisterCleanup(cleanup)  # Trap signals and register the cleanup() function to be run on exit.
-
-    logger.info('Main code starting.')
+def rfiloop():
+    """Loop forever, turning outputs on and off for RFI testing. Does not exit.
+    """
+    logger.info('RFI loop starting.')
     while True:
-        for letter in 'ABCD':
-            for number in '12345678':
+        print
+        for number in '12345678':
+            print
+            for letter in 'ABCD':
                 name = '%s%s' % (letter, number)
                 OUTPUTS[name].turnon()
                 time.sleep(0.5)
-                logger.info(OUTPUTS[name])
+                print OUTPUTS[name],
+                logger.debug(OUTPUTS[name])
                 OUTPUTS[name].turnoff()
                 time.sleep(0.5)
         logger.info('Waiting for 24 seconds')
         time.sleep(24)
+
+
+if __name__ == '__main__':
+    init()
+    RegisterCleanup(cleanup)  # Trap signals and register the cleanup() function to be run on exit.
+
+    parser = optparse.OptionParser(version="%prog")
+    parser.add_option("--rfi", dest="rfi", action='store_true', default=False,
+                      help="Loop forever in RFI test mode")
+
+    (options, args) = parser.parse_args()
+
+    if options.rfi:
+        rfiloop()   # Does not return
+
+    while True:
+        print
+        for number in '12345678':
+            print
+            for letter in 'ABCD':
+                name = '%s%s' % (letter, number)
+                print OUTPUTS[name],
+                logger.debug(OUTPUTS[name])
+        logger.info('Waiting for 24 seconds')
+        time.sleep(30)
