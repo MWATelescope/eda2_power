@@ -498,15 +498,15 @@ def rfiloop():
     while True:
         print
         for number in '12345678':
-            print
             for letter in 'ABCD':
                 name = '%s%s' % (letter, number)
                 OUTPUTS[name].turnon()
                 time.sleep(0.5)
-                print OUTPUTS[name],
+                print OUTPUTS[name], '  ',
                 logger.debug(OUTPUTS[name])
                 OUTPUTS[name].turnoff()
                 time.sleep(0.5)
+            print
         logger.info('Waiting for 24 seconds')
         time.sleep(24)
 
@@ -527,10 +527,10 @@ if __name__ == '__main__':
     while True:
         print
         for number in '12345678':
-            print
             for letter in 'ABCD':
                 name = '%s%s' % (letter, number)
-                print OUTPUTS[name],
+                print OUTPUTS[name], '  ',
                 logger.debug(OUTPUTS[name])
-        logger.info('Waiting for 24 seconds')
+            print
+        logger.info('Waiting for 30 seconds')
         time.sleep(30)
