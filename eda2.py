@@ -503,6 +503,7 @@ def rfiloop():
                 OUTPUTS[name].turnon()
                 time.sleep(0.5)
                 print OUTPUTS[name], '  ',
+                sys.stdout.flush()
                 logger.debug(OUTPUTS[name])
                 OUTPUTS[name].turnoff()
                 time.sleep(0.5)
