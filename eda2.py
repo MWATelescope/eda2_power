@@ -525,6 +525,8 @@ if __name__ == '__main__':
     if options.rfi:
         rfiloop()   # Does not return
 
+    turn_all_on()
+
     while True:
         print
         for number in '12345678':
