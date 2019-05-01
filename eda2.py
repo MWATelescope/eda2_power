@@ -44,7 +44,10 @@ Type "help", "copyright", "credits" or "license" for more information.
 import atexit
 import logging
 from logging import handlers
+import optparse
+import os
 import signal
+import socket
 import sys
 import threading
 import time
@@ -55,11 +58,21 @@ import smbus
 
 import spidev
 
+USAGE = """
+EDA2 power controller.
+Use with no arguments to turn on all outputs, and wait forever. On exit (eg, with ^C), all
+outputs will be turned off again.
+
+Use the --rfi flag to go into RFI test mode instead - each of the 32 outputs in turn will be
+turned on for ~0.5 seconds, then off for ~0.5 seconds. After all 32 outputs have been
+turned on and off, the system will wait for 24 seconds with all outputs off, then start the
+cycle again."""
+
 # set up the logging before importing Pyro4
 
-LOGLEVEL_CONSOLE = logging.WARNING  # INFO and above will be printed to STDOUT as well as the logfile
+LOGLEVEL_CONSOLE = logging.INFO  # INFO and above will be printed to STDOUT as well as the logfile
 LOGLEVEL_LOGFILE = logging.DEBUG  # All messages will be sent to the log file
-LOGFILE = "/tmp/eda2.log"
+LOGFILE = "/var/log/eda2/eda2.log"
 
 ADCS = None    # When running, contains the ADCSet instance that handles all the ADC chips.
 PC1 = None      # When running, contains an I2C_Control instance to control the first output control chip
@@ -95,17 +108,12 @@ CHIPMAP = {'A1':(10, 7, 0, 1), 'A2':( 9, 7, 2, 3),
            }
 
 
-class MWALogFormatter(object):
-    def format(self, record):
-        return "%s: time %10.6f - %s" % (record.levelname, time.time(), record.getMessage())
-
-
-mwalf = MWALogFormatter()
+mwalf = logging.Formatter(fmt="%(asctime)s - %(levelname)s: %(message)s")
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-fh = handlers.RotatingFileHandler(LOGFILE, maxBytes=1e9, backupCount=5)  # 1 Gb per file, max of five old log files
+fh = handlers.RotatingFileHandler(LOGFILE, maxBytes=1e9, backupCount=5, mode='a')  # 1 Gb per file, max of five old log files
 fh.setLevel(LOGLEVEL_LOGFILE)
 fh.setFormatter(mwalf)
 
@@ -116,6 +124,14 @@ ch.setFormatter(mwalf)
 # add the handlers to the logger
 logger.addHandler(fh)
 logger.addHandler(ch)
+
+
+import Pyro4
+
+sys.excepthook = Pyro4.util.excepthook
+Pyro4.config.DETAILED_TRACEBACK = True
+
+PYROPORT = 19999
 
 SIGNAL_HANDLERS = {}
 CLEANUP_FUNCTION = None
@@ -177,16 +193,9 @@ def cleanup():
     # the SPIU lock or some other problem with the SPIUHandler() code.
 
     try:
-        if PC1 is not None:
-            PC1.turn_all_off()
+        turn_all_off()
     except:
-        logger.exception('cleanup() - FAILED to turn off PC1 outputs on cleanup. : %s', traceback.format_exc())
-
-    try:
-        if PC2 is not None:
-            PC2.turn_all_off()
-    except:
-        logger.exception('cleanup() - FAILED to turn off PC2 outputs on cleanup. : %s', traceback.format_exc())
+        logger.exception('cleanup() - FAILED to turn off outputs on cleanup. : %s', traceback.format_exc())
 
     try:
         GPIO.cleanup()
@@ -279,7 +288,6 @@ class ADC_Set(object):
         if number is None:
             with self.lock:
                 GPIO.output(CS_DECODE_ENABLE, 0)
-            logger.info('Disabled all outputs on 74X138')
             return True
         else:
             if type(number) == int:
@@ -292,7 +300,6 @@ class ADC_Set(object):
                         GPIO.output(CS_DECODE_B, b)
                         GPIO.output(CS_DECODE_C, c)
                         GPIO.output(CS_DECODE_ENABLE, 1)
-                    logger.info('Selected output %d on 74X138' % number)
                     return True
                 else:
                     logger.error('Argument to chip_select must be None, or 0-7, not %d' % number)
@@ -412,34 +419,6 @@ class I2C_Control(object):
             self._write_outputs(p1=p1, p2=p2)
         return True
 
-    def turn_all_on(self):
-        """
-        Turn ON all the outputs for this 6416 chip.
-
-        :return: False if there was an error, True otherwise.
-        """
-        # TODO - loop over them all with a short delay, to reduce switching transients.
-        with I2C_LOCK:    # Get the lock before we start actually using the I2C bus, because we are changing instance data
-            self.portmap = [1] * 16
-            p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
-            p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
-            self._write_outputs(p1=p1, p2=p2)
-        return True
-
-    def turn_all_off(self):
-        """
-        Turn OFF all the outputs for this 6416 chip.
-
-        :return: False if there was an error, True otherwise.
-        """
-        # TODO - loop over them all with a short delay, to reduce switching transients.
-        with I2C_LOCK:    # Get the lock before we start actually using the I2C bus, because we are changing instance data
-            self.portmap = [0] * 16
-            p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
-            p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
-            self._write_outputs(p1=p1, p2=p2)
-        return True
-
 
 class Antenna(object):
     """
@@ -478,7 +457,6 @@ class Antenna(object):
         """
         v_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.v_chan)
         i_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.i_chan)
-        # TODO - scale voltage and current
         return 60.0 * v_raw / 4096.0, i_raw / 4.096
 
     def __repr__(self):
@@ -487,6 +465,133 @@ class Antenna(object):
             return '<%s:  ON: %6.3f V, %6.3f mA>' % (self.name, v, i)
         else:
             return '<%s: OFF: %6.3f V, %6.3f mA>' % (self.name, v, i)
+
+
+class PyroHandler(object):
+    """Implements Pyro4 methods for power supply control (startup, shutdown).
+    """
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.exit = False
+
+    @Pyro4.expose
+    def ping(self):
+        """Empty function, call to see if RPC connection is live.
+        """
+        logger.info('PyroHandler.ping() called')
+        return True
+
+    @Pyro4.expose
+    def turn_all_off(self):
+        logger.info('PyroHandler.turn_all_off() called')
+        with self.lock:
+            return turn_all_off()
+
+    @Pyro4.expose
+    def turn_all_on(self):
+        logger.info('PyroHandler.turn_all_on() called')
+        with self.lock:
+            return turn_all_on()
+
+    @Pyro4.expose
+    def get_powers(self):
+        logger.info('PyroHandler.get_powers() called')
+        with self.lock:
+            results = {}
+            for aname in OUTPUTS.keys():
+                results[aname] = OUTPUTS[aname].sense()
+        return results
+
+    @Pyro4.expose
+    def read_environment(self):
+        logger.info('PyroHandler.read_environment() called')
+        with self.lock:
+            return read_environment()
+
+    @Pyro4.expose
+    def turnon(self, aname):
+        logger.info('PyroHandler.turnon("%s") called' % aname)
+        if aname in OUTPUTS.keys():
+            with self.lock:
+                return OUTPUTS[aname].turnon()
+        else:
+            return None
+
+    @Pyro4.expose
+    def turnoff(self, aname):
+        logger.info('PyroHandler.turnoff("%s") called' % aname)
+        if aname in OUTPUTS.keys():
+            with self.lock:
+                return OUTPUTS[aname].turnoff()
+        else:
+            return None
+
+    @Pyro4.expose
+    def ison(self, aname):
+        logger.info('PyroHandler.ison("%s") called' % aname)
+        if aname in OUTPUTS.keys():
+            with self.lock:
+                return OUTPUTS[aname].ison()
+        else:
+            return None
+
+    @Pyro4.expose
+    def reboot(self):
+        """Reboot the SBC - don't bother acquire a lock, we don't want to block waiting for something else to
+           finish.
+        """
+        logger.info('PyroHandler.reboot() called')
+        cleanup()
+        logger.info('Rebooting SBC')
+        os.system('sudo reboot')
+        self.exit = True
+        return True
+
+    @Pyro4.expose
+    def shutdown(self):
+        """Does a full, safe shutdown, including leaving thermal control in a safe state
+             for when power returns, or until power is actually cut off.
+
+             BEWARE! This halts the SBC, so the only way to recover is to physically cycle the power
+                     to that receiver!
+        """
+        logger.info('PyroHandler.shutdown() called')
+        cleanup()
+        logger.info('Shutting down and halting SBC')
+        os.system('sudo shutdown -h now')
+        self.exit = True
+        return True
+
+    def servePyroRequests(self):
+        """When called, start serving Pyro requests.
+        """
+        iface = None
+        logger.info('Getting interface address for Pyro server')
+        while iface is None:
+            try:
+                iface = Pyro4.socketutil.getInterfaceAddress('10.128.0.1')  # What is the network IP of this receiver?
+            except socket.error:
+                logger.info("Network down, can't start Pyro server, sleeping for 10 seconds")
+                time.sleep(10)
+        self.exit = False
+        while not self.exit:
+            logger.info("Starting Pyro4 server")
+            try:
+                # just start a new daemon on a random port
+                pyro_daemon = Pyro4.Daemon(host=iface, port=PYROPORT)
+                # register the object in the daemon and let it get a new objectId
+                pyro_daemon.register(self, objectId='eda2')
+            except:
+                logger.error("Exception in Pyro4 startup. Retrying in 10 sec: %s" % (traceback.format_exc(),))
+                time.sleep(10)
+                continue
+
+            try:
+                pyro_daemon.requestLoop()
+            except:
+                logger.error("Exception in Pyro4 server. Restarting in 10 sec: %s" % (traceback.format_exc(),))
+                time.sleep(10)
+        logger.info('Shutting down server due to reboot() or shutdown() call')
 
 
 def read_environment():
@@ -508,7 +613,7 @@ def read_environment():
 
 
 def turn_all_on():
-    """Turn on all the outputs.
+    """Turn on all the outputs, with a 50ms delay between each output.
     """
     for output in OUTPUTS.values():
         output.turnon()
@@ -516,26 +621,60 @@ def turn_all_on():
 
 
 def turn_all_off():
-    """Turn off all the outputs.
+    """Turn off all the outputs, with a 50ms delay between each output.
     """
     for output in OUTPUTS.values():
         output.turnoff()
         time.sleep(0.05)
 
 
+def rfiloop():
+    """Loop forever, turning outputs on and off for RFI testing. Does not exit.
+    """
+    logger.info('RFI loop starting.')
+    while True:
+        print
+        for number in '12345678':
+            for letter in 'ABCD':
+                name = '%s%s' % (letter, number)
+                OUTPUTS[name].turnon()
+                time.sleep(0.5)
+                print OUTPUTS[name], '  ',
+                sys.stdout.flush()
+                logger.debug(OUTPUTS[name])
+                OUTPUTS[name].turnoff()
+                time.sleep(0.5)
+            print
+        logger.info('Waiting for 24 seconds')
+        time.sleep(24)
+
+
 if __name__ == '__main__':
     init()
     RegisterCleanup(cleanup)  # Trap signals and register the cleanup() function to be run on exit.
 
-    logger.info('Main code starting.')
-    for letter in 'ABCD':
-        for number in '12345678':
-            name = '%s%s' % (letter, number)
-            OUTPUTS[name].turnon()
-            time.sleep(0.1)
-            print OUTPUTS[name]
-            OUTPUTS[name].turnoff()
-            time.sleep(0.1)
+    parser = optparse.OptionParser(version="%prog")
+    parser.add_option("--rfi", dest="rfi", action='store_true', default=False,
+                      help="Loop forever in RFI test mode")
 
-    # do stuff
-    # RegisterCleanup(cleanup)             # Trap signals and register the cleanup() function to be run on exit.
+    (options, args) = parser.parse_args()
+
+    if options.rfi:
+        rfiloop()   # Does not return
+
+    handler = PyroHandler()
+    # Start up the Pyro communications loop, to accept incoming commands.
+    pyrothread = threading.Thread(target=handler.servePyroRequests(), name='Pyroloop')
+    pyrothread.daemon = True  # Stop this thread when the main program exits.
+    pyrothread.start()
+
+    while not handler.exit:
+        print
+        for number in '12345678':
+            for letter in 'ABCD':
+                name = '%s%s' % (letter, number)
+                print OUTPUTS[name], '  ',
+                logger.debug(OUTPUTS[name])
+            print
+        logger.info('Waiting for 30 seconds')
+        time.sleep(30)
