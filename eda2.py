@@ -649,15 +649,12 @@ def rfiloop():
     """Loop forever, turning outputs on and off for RFI testing. Does not exit.
     """
     logger.info('RFI loop starting.')
-    while True:
-        print
+    while not PYROHANDLER.exit:
         for number in '12345678':
             for letter in 'ABCD':
                 name = '%s%s' % (letter, number)
                 OUTPUTS[name].turnon()
                 time.sleep(0.5)
-                print OUTPUTS[name], '  ',
-                sys.stdout.flush()
                 logger.debug(OUTPUTS[name])
                 OUTPUTS[name].turnoff()
                 time.sleep(0.5)
@@ -699,11 +696,11 @@ if __name__ == '__main__':
         rfithread = threading.Thread(target=rfiloop, name='RFIloop')
         rfithread.daemon = True  # Stop this thread when the main program exits.
         rfithread.start()
-
-    logger.debug('About to start monitor loop.')
-    monthread = threading.Thread(target=monitorloop, name='Monloop')
-    monthread.daemon = True  # Stop this thread when the main program exits.
-    monthread.start()
+    else:
+        logger.debug('About to start monitor loop.')
+        monthread = threading.Thread(target=monitorloop, name='Monloop')
+        monthread.daemon = True  # Stop this thread when the main program exits.
+        monthread.start()
 
     # Start up the Pyro communications loop, to accept incoming commands.
     logger.debug('About to start Pyro loop.')
