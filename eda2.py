@@ -136,6 +136,8 @@ PYROPORT = 19999
 SIGNAL_HANDLERS = {}
 CLEANUP_FUNCTION = None
 
+PYROHANDLER = None
+
 # IO pin allocations on the Raspberry Pi GPIO header
 CS_DECODE_A = 31         # Bit 0 of the address on the 74X138 3-to-8 decoder
 CS_DECODE_B = 32         # Bit 1 of the address on the 74X138 3-to-8 decoder
@@ -198,6 +200,14 @@ def cleanup():
         logger.exception('cleanup() - FAILED to turn off outputs on cleanup. : %s', traceback.format_exc())
 
     try:
+        if PYROHANDLER is not None:
+            PYROHANDLER.exit = True
+            logger.critical("cleanup() - Shutting down network Pyro4 daemon")
+            PYROHANDLER.pyro_daemon.shutdown()
+    except:
+        logger.exception('cleanup() - FAILED to shut down Pyro handler. : %s', traceback.format_exc())
+
+    try:
         GPIO.cleanup()
         if SMBUS is not None:
             SMBUS.close()
@@ -209,7 +219,7 @@ def cleanup():
 
 def SignalHandler(signum=None, frame=None):
     """
-      Called when a signal is received thay would result in the programme exit, if the
+      Called when a signal is received that would result in the programme exit, if the
       RegisterCleanup() function has been previously called to set the signal handlers and
       define an exit function using the 'atexit' module.
 
@@ -473,6 +483,7 @@ class PyroHandler(object):
     def __init__(self):
         self.lock = threading.RLock()
         self.exit = False
+        self.pyro_daemon = None
 
     @Pyro4.expose
     def ping(self):
@@ -578,16 +589,16 @@ class PyroHandler(object):
             logger.info("Starting Pyro4 server")
             try:
                 # just start a new daemon on a random port
-                pyro_daemon = Pyro4.Daemon(host=iface, port=PYROPORT)
+                self.pyro_daemon = Pyro4.Daemon(host=iface, port=PYROPORT)
                 # register the object in the daemon and let it get a new objectId
-                pyro_daemon.register(self, objectId='eda2')
+                self.pyro_daemon.register(self, objectId='eda2')
             except:
                 logger.error("Exception in Pyro4 startup. Retrying in 10 sec: %s" % (traceback.format_exc(),))
                 time.sleep(10)
                 continue
 
             try:
-                pyro_daemon.requestLoop()
+                self.pyro_daemon.requestLoop()
             except:
                 logger.error("Exception in Pyro4 server. Restarting in 10 sec: %s" % (traceback.format_exc(),))
                 time.sleep(10)
@@ -662,13 +673,13 @@ if __name__ == '__main__':
     if options.rfi:
         rfiloop()   # Does not return
 
-    handler = PyroHandler()
+    PYROHANDLER = PyroHandler()
     # Start up the Pyro communications loop, to accept incoming commands.
-    pyrothread = threading.Thread(target=handler.servePyroRequests(), name='Pyroloop')
+    pyrothread = threading.Thread(target=PYROHANDLER.servePyroRequests(), name='Pyroloop')
     pyrothread.daemon = True  # Stop this thread when the main program exits.
     pyrothread.start()
 
-    while not handler.exit:
+    while not PYROHANDLER.exit:
         print
         for number in '12345678':
             for letter in 'ABCD':
