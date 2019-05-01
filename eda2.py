@@ -193,9 +193,10 @@ def cleanup():
     """
     # Turn off the charge FETs and all other BL233 output pins using the direct serial interface, in case of a deadlock on
     # the SPIU lock or some other problem with the SPIUHandler() code.
-
+    global OUTPUTS, SMBUS
     try:
         turn_all_off()
+        OUTPUTS = {}
     except:
         logger.exception('cleanup() - FAILED to turn off outputs on cleanup. : %s', traceback.format_exc())
 
@@ -211,6 +212,7 @@ def cleanup():
         GPIO.cleanup()
         if SMBUS is not None:
             SMBUS.close()
+            SMBUS = None
     except:
         logger.exception('cleanup() - FAILED to cleanup GPIO pins and close I2C bus. : %s', traceback.format_exc())
 
@@ -664,6 +666,22 @@ def rfiloop():
         time.sleep(24)
 
 
+def monitorloop():
+    """Loop forever, printing current and voltage values. Does not exit.
+    """
+    while not PYROHANDLER.exit:
+        logger.debug('started monitor loop.')
+        print
+        for number in '12345678':
+            for letter in 'ABCD':
+                logger.debug('%s%s' % (letter, number))
+                name = '%s%s' % (letter, number)
+                logger.debug(OUTPUTS[name])
+            print
+        logger.info('Waiting for 30 seconds')
+        time.sleep(30)
+
+
 if __name__ == '__main__':
     init()
     RegisterCleanup(cleanup)  # Trap signals and register the cleanup() function to be run on exit.
@@ -674,26 +692,24 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
 
-    if options.rfi:
-        rfiloop()   # Does not return
-
     PYROHANDLER = PyroHandler()
+
+    if options.rfi:
+        logger.debug('About to start RFI loop.')
+        rfithread = threading.Thread(target=rfiloop, name='RFIloop')
+        rfithread.daemon = True  # Stop this thread when the main program exits.
+        rfithread.start()
+
+    logger.debug('About to start monitor loop.')
+    monthread = threading.Thread(target=monitorloop, name='Monloop')
+    monthread.daemon = True  # Stop this thread when the main program exits.
+    monthread.start()
+
     # Start up the Pyro communications loop, to accept incoming commands.
-    pyrothread = threading.Thread(target=PYROHANDLER.servePyroRequests(), name='Pyroloop')
+    logger.debug('About to start Pyro loop.')
+    pyrothread = threading.Thread(target=PYROHANDLER.servePyroRequests, name='Pyroloop')
     pyrothread.daemon = True  # Stop this thread when the main program exits.
     pyrothread.start()
 
-    logger.debug('About to start monitor loop.')
-
     while not PYROHANDLER.exit:
-        logger.debug('started monitor loop.')
-        print
-        for number in '12345678':
-            for letter in 'ABCD':
-                logger.debug('%s%s' % (letter, number))
-                name = '%s%s' % (letter, number)
-                print OUTPUTS[name], '  ',
-                logger.debug(OUTPUTS[name])
-            print
-        logger.info('Waiting for 30 seconds')
-        time.sleep(30)
+        time.sleep(1)
