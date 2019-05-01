@@ -45,7 +45,9 @@ import atexit
 import logging
 from logging import handlers
 import optparse
+import os
 import signal
+import socket
 import sys
 import threading
 import time
@@ -122,6 +124,14 @@ ch.setFormatter(mwalf)
 # add the handlers to the logger
 logger.addHandler(fh)
 logger.addHandler(ch)
+
+
+import Pyro4
+
+sys.excepthook = Pyro4.util.excepthook
+Pyro4.config.DETAILED_TRACEBACK = True
+
+PYROPORT = 19999
 
 SIGNAL_HANDLERS = {}
 CLEANUP_FUNCTION = None
@@ -457,6 +467,133 @@ class Antenna(object):
             return '<%s: OFF: %6.3f V, %6.3f mA>' % (self.name, v, i)
 
 
+class PyroHandler(object):
+    """Implements Pyro4 methods for power supply control (startup, shutdown).
+    """
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.exit = False
+
+    @Pyro4.expose
+    def ping(self):
+        """Empty function, call to see if RPC connection is live.
+        """
+        logger.info('PyroHandler.ping() called')
+        return True
+
+    @Pyro4.expose
+    def turn_all_off(self):
+        logger.info('PyroHandler.turn_all_off() called')
+        with self.lock:
+            return turn_all_off()
+
+    @Pyro4.expose
+    def turn_all_on(self):
+        logger.info('PyroHandler.turn_all_on() called')
+        with self.lock:
+            return turn_all_on()
+
+    @Pyro4.expose
+    def get_powers(self):
+        logger.info('PyroHandler.get_powers() called')
+        with self.lock:
+            results = {}
+            for aname in OUTPUTS.keys():
+                results[aname] = OUTPUTS[aname].sense()
+        return results
+
+    @Pyro4.expose
+    def read_environment(self):
+        logger.info('PyroHandler.read_environment() called')
+        with self.lock:
+            return read_environment()
+
+    @Pyro4.expose
+    def turnon(self, aname):
+        logger.info('PyroHandler.turnon("%s") called' % aname)
+        if aname in OUTPUTS.keys():
+            with self.lock:
+                return OUTPUTS[aname].turnon()
+        else:
+            return None
+
+    @Pyro4.expose
+    def turnoff(self, aname):
+        logger.info('PyroHandler.turnoff("%s") called' % aname)
+        if aname in OUTPUTS.keys():
+            with self.lock:
+                return OUTPUTS[aname].turnoff()
+        else:
+            return None
+
+    @Pyro4.expose
+    def ison(self, aname):
+        logger.info('PyroHandler.ison("%s") called' % aname)
+        if aname in OUTPUTS.keys():
+            with self.lock:
+                return OUTPUTS[aname].ison()
+        else:
+            return None
+
+    @Pyro4.expose
+    def reboot(self):
+        """Reboot the SBC - don't bother acquire a lock, we don't want to block waiting for something else to
+           finish.
+        """
+        logger.info('PyroHandler.reboot() called')
+        cleanup()
+        logger.info('Rebooting SBC')
+        os.system('sudo reboot')
+        self.exit = True
+        return True
+
+    @Pyro4.expose
+    def shutdown(self):
+        """Does a full, safe shutdown, including leaving thermal control in a safe state
+             for when power returns, or until power is actually cut off.
+
+             BEWARE! This halts the SBC, so the only way to recover is to physically cycle the power
+                     to that receiver!
+        """
+        logger.info('PyroHandler.shutdown() called')
+        cleanup()
+        logger.info('Shutting down and halting SBC')
+        os.system('sudo shutdown -h now')
+        self.exit = True
+        return True
+
+    def servePyroRequests(self):
+        """When called, start serving Pyro requests.
+        """
+        iface = None
+        logger.info('Getting interface address for Pyro server')
+        while iface is None:
+            try:
+                iface = Pyro4.socketutil.getInterfaceAddress('10.128.0.1')  # What is the network IP of this receiver?
+            except socket.error:
+                logger.info("Network down, can't start Pyro server, sleeping for 10 seconds")
+                time.sleep(10)
+        self.exit = False
+        while not self.exit:
+            logger.info("Starting Pyro4 server")
+            try:
+                # just start a new daemon on a random port
+                pyro_daemon = Pyro4.Daemon(host=iface, port=PYROPORT)
+                # register the object in the daemon and let it get a new objectId
+                pyro_daemon.register(self, objectId='eda2')
+            except:
+                logger.error("Exception in Pyro4 startup. Retrying in 10 sec: %s" % (traceback.format_exc(),))
+                time.sleep(10)
+                continue
+
+            try:
+                pyro_daemon.requestLoop()
+            except:
+                logger.error("Exception in Pyro4 server. Restarting in 10 sec: %s" % (traceback.format_exc(),))
+                time.sleep(10)
+        logger.info('Shutting down server due to reboot() or shutdown() call')
+
+
 def read_environment():
     """
     Reads the the HIH7120 humidity/temperature sensor on address 0x27, and return the relative humidity as a percenteage,
@@ -525,9 +662,13 @@ if __name__ == '__main__':
     if options.rfi:
         rfiloop()   # Does not return
 
-    turn_all_on()
+    handler = PyroHandler()
+    # Start up the Pyro communications loop, to accept incoming commands.
+    pyrothread = threading.Thread(target=handler.servePyroRequests(), name='Pyroloop')
+    pyrothread.daemon = True  # Stop this thread when the main program exits.
+    pyrothread.start()
 
-    while True:
+    while not handler.exit:
         print
         for number in '12345678':
             for letter in 'ABCD':
