@@ -671,7 +671,6 @@ def monitorloop():
         print
         for number in '12345678':
             for letter in 'ABCD':
-                logger.debug('%s%s' % (letter, number))
                 name = '%s%s' % (letter, number)
                 logger.debug(OUTPUTS[name])
             print
