@@ -231,6 +231,7 @@ def SignalHandler(signum=None, frame=None):
       :param frame: current stack frame, not used here.
     """
     logger.critical("SignalHandler() - Signal %d received." % signum)
+    cleanup()
     sys.exit(-signum)  # Called by signal handler, so exit with a return code indicating the signal received, AFTER
     # calling the cleanup function registered by the atexit.register() call in RegisterCleanup()
 
@@ -679,10 +680,14 @@ if __name__ == '__main__':
     pyrothread.daemon = True  # Stop this thread when the main program exits.
     pyrothread.start()
 
+    logger.debug('About to start monitor loop.')
+
     while not PYROHANDLER.exit:
+        logger.debug('started monitor loop.')
         print
         for number in '12345678':
             for letter in 'ABCD':
+                logger.debug('%s%s' % (letter, number))
                 name = '%s%s' % (letter, number)
                 print OUTPUTS[name], '  ',
                 logger.debug(OUTPUTS[name])
