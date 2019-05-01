@@ -601,9 +601,12 @@ class PyroHandler(object):
             try:
                 self.pyro_daemon.requestLoop()
             except:
-                logger.error("Exception in Pyro4 server. Restarting in 10 sec: %s" % (traceback.format_exc(),))
-                time.sleep(10)
-        logger.info('Shutting down server due to reboot() or shutdown() call')
+                if not self.exit:
+                    logger.error("Exception in Pyro4 server. Restarting in 10 sec: %s" % (traceback.format_exc(),))
+                    time.sleep(10)
+                else:
+                    logger.info('Pyro4 server exiting.')
+        logger.info('Shutting down server.')
 
 
 def read_environment():
