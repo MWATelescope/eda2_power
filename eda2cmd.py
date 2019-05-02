@@ -33,7 +33,7 @@ Usage: '%s <command> [<name>]' runs the specified command. Some commands
             shutdown (shutdown & HALT the Raspberry Pi - VERY DANGEROUS)
             
             status (print a status string for each output)
-            read_env (print the temperature and humidity inside the unit)
+            read_env (print temperature and humidity inside the unit)
             version (print the software version number for each output)
 
        <name> is an upper case letter (A, B, C or D) followed by a digit 
