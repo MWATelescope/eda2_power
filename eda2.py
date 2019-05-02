@@ -58,6 +58,8 @@ import smbus
 
 import spidev
 
+VERSION = '0.8.1'
+
 USAGE = """
 EDA2 power controller.
 Use with no arguments to turn on all outputs, and wait forever. On exit (eg, with ^C), all
@@ -457,10 +459,12 @@ class Antenna(object):
     def turnon(self):
         self.pcontrol.turnon(self.con_chan)
         self._poweron = True
+        return True
 
     def turnoff(self):
         self.pcontrol.turnoff(self.con_chan)
         self._poweron = False
+        return True
 
     def ison(self):
         return self._poweron
@@ -468,16 +472,22 @@ class Antenna(object):
     def sense(self):
         """Returns a tuple of (voltage, current) in Volts and milliAmps respectively
         """
-        v_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.v_chan)
-        i_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.i_chan)
-        return 60.0 * v_raw / 4096.0, i_raw / 4.096
+        try:
+            v_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.v_chan)
+            i_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.i_chan)
+            pstate = {False:'OFF', True:'ON'}[self._poweron]
+            return pstate, 60.0 * v_raw / 4096.0, i_raw / 4.096
+        except:
+            logger.error('Error reading ADC: %s' % traceback.format_exc())
+            return None
 
     def __repr__(self):
-        v, i = self.sense()
-        if self.ison():
-            return '<%s:  ON: %6.3f V, %6.3f mA>' % (self.name, v, i)
+        result = self.sense()
+        if result is None:
+            return '<%s: %3s: Error reading ADCs>' % (self.name, self.ison())
         else:
-            return '<%s: OFF: %6.3f V, %6.3f mA>' % (self.name, v, i)
+            pstate, v, i = result
+            return '<%s: %3s: %6.3f V, %6.3f mA>' % (self.name, pstate, v, i)
 
 
 class PyroHandler(object):
@@ -550,6 +560,11 @@ class PyroHandler(object):
             return None
 
     @Pyro4.expose
+    def version(self):
+        logger.info('Pyrohandler.version() called')
+        return VERSION
+
+    @Pyro4.expose
     def reboot(self):
         """Reboot the SBC - don't bother acquire a lock, we don't want to block waiting for something else to
            finish.
@@ -618,15 +633,19 @@ def read_environment():
 
     :return: a tuple of (humidity, temperature)
     """
-    with I2C_LOCK:
-        SMBUS.write_quick(0x27)
-        time.sleep(0.11)  # Wait 110ms for conversion
-        data = SMBUS.read_i2c_block_data(0x27, 0, 4)
-    h_raw = (data[0] & 63) * 256 + data[1]
-    humidity = h_raw / 16382.0 * 100.0
-    t_raw = (data[0] * 256 + data[1]) / 4
-    temperature = t_raw / 16382.0 * 165 - 40
-    return humidity, temperature
+    try:
+        with I2C_LOCK:
+            SMBUS.write_quick(0x27)
+            time.sleep(0.11)  # Wait 110ms for conversion
+            data = SMBUS.read_i2c_block_data(0x27, 0, 4)
+        h_raw = (data[0] & 63) * 256 + data[1]
+        humidity = h_raw / 16382.0 * 100.0
+        t_raw = (data[0] * 256 + data[1]) / 4
+        temperature = t_raw / 16382.0 * 165 - 40
+        return humidity, temperature
+    except:
+        logger.error('Error reading Temp/Humidity: %s' % traceback.format_exc())
+        return None
 
 
 def turn_all_on():
