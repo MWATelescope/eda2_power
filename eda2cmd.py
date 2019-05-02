@@ -30,10 +30,11 @@ Usage: '%s <command> [<name>]' runs the specified command. Some commands
             turnoff <name> (turn off output <name>)
 
             reboot (reboot the Raspberry Pi - DANGEROUS)
-            shutdown (shut down and HALT the Raspberry Pi - VERY DANGEROUS)
+            shutdown (shutdown & HALT the Raspberry Pi - VERY DANGEROUS)
             
-            status (print a status string for each BFIF)
-            version (print the software version number for each BFIF)
+            status (print a status string for each output)
+            read_env (print the temperature and humidity inside the unit)
+            version (print the software version number for each output)
 
        <name> is an upper case letter (A, B, C or D) followed by a digit 
        from 1-8, eg 'A2' or 'D7' (without the quotes).
