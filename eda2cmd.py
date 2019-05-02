@@ -127,7 +127,7 @@ if __name__ == '__main__':
                     if len(result) == 3:
                         pstate, v, i = result[name]
                     else:
-                        ison = proxy.ison(oname)
+                        ison = proxy.ison(name)
                         pstate = {False:'OFF', True:'ON'}[ison]
                         v, i = result[name]
                     print('<%s: %3s: %6.3f V, %6.3f mA>' % (name, pstate, v, i))
