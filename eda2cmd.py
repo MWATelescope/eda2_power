@@ -110,7 +110,7 @@ if __name__ == '__main__':
         result = proxy.turn_all_off()
         print('All OFF')
     elif action == 'ison':
-        result = proxy.ison()
+        result = proxy.ison(oname)
         print({False:'OFF', True:'ON'}[result])
     if action == 'turnon':
         result = proxy.turnon(oname)
@@ -124,7 +124,12 @@ if __name__ == '__main__':
             for number in range(1,9):
                 name = '%s%d' % (letter, number)
                 if name in result.keys():
-                    pstate, v, i = result[name]
+                    if len(result) == 3:
+                        pstate, v, i = result[name]
+                    else:
+                        ison = proxy.ison(oname)
+                        pstate = {False:'OFF', True:'ON'}[ison]
+                        v, i = result[name]
                     print('<%s: %3s: %6.3f V, %6.3f mA>' % (name, pstate, v, i))
                 else:
                     print('%s: Unknown.' % name)
