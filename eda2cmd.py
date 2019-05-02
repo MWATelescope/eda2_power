@@ -65,7 +65,7 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     tlist = []
     action = ''
-    if (len(args) < 2) or (args[0].lower() in ['h', 'help', '-h', '-help', '--h', '--help', '?', '-?', '--?']):
+    if (len(args) < 1) or (args[0].lower() in ['h', 'help', '-h', '-help', '--h', '--help', '?', '-?', '--?']):
         print USAGE
         sys.exit(0)
 
