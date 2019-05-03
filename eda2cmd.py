@@ -125,7 +125,7 @@ if __name__ == '__main__':
             for number in range(1,9):
                 name = '%s%d' % (letter, number)
                 if name in result.keys():
-                    if len(result) == 3:
+                    if len(result[name]) == 3:
                         pstate, v, i = result[name]
                     else:
                         ison = proxy.ison(name)
