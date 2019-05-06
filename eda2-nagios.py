@@ -35,9 +35,9 @@ def main(powers=None, env_data=None):
                     pstate, v, i = powers[name]
                     # On/off only human readable, voltage only in performance params, current in both
                     oparams.append('%s_state=%s' % (name, pstate))
-                    pparams.append('%s_volts=%6.3f' % (name, v))
-                    oparams.append('%s_mA=%7.3f' % (name, i))
-                    pparams.append('%s_mA=%7.3f' % (name, i))
+                    pparams.append('%s_volts=%1.3f' % (name, v))
+                    oparams.append('%s_mA=%1.3f' % (name, i))
+                    pparams.append('%s_mA=%1.3f' % (name, i))
                 else:
                     oparams.append('%s missing data')
                     p_error = "One or more channels missing power data"
@@ -53,10 +53,10 @@ def main(powers=None, env_data=None):
     if env_data:
         humidity, temperature = env_data
         # Show humidity and temperature in both human-readable string and performance data
-        oparams.append('humidity=%2.0f' % humidity)
-        pparams.append('humidity=%2.0f' % humidity)
-        oparams.append('temperature=%4.1f' % temperature)
-        pparams.append('temperature=%4.1f' % temperature)
+        oparams.append('humidity=%1.0f' % humidity)
+        pparams.append('humidity=%1.0f' % humidity)
+        oparams.append('temperature=%1.1f' % temperature)
+        pparams.append('temperature=%1.1f' % temperature)
 
         if temperature > TEMP_CRIT:
             t_res = 2
