@@ -129,6 +129,7 @@ logger.addHandler(ch)
 
 
 import Pyro4
+from Pyro4 import socketutil, util
 
 sys.excepthook = Pyro4.util.excepthook
 Pyro4.config.DETAILED_TRACEBACK = True
@@ -533,31 +534,40 @@ class PyroHandler(object):
             return read_environment()
 
     @Pyro4.expose
-    def turnon(self, aname):
-        logger.info('PyroHandler.turnon("%s") called' % aname)
-        if aname in OUTPUTS.keys():
-            with self.lock:
-                return OUTPUTS[aname].turnon()
-        else:
-            return None
+    def turnon(self, anames):
+        logger.info('PyroHandler.turnon(%s) called' % anames)
+        retlist = []
+        for aname in anames:
+            if aname.upper() in OUTPUTS.keys():
+                with self.lock:
+                    retlist.append(OUTPUTS[aname.upper()].turnon())
+            else:
+                retlist.append(None)
+        return retlist
 
     @Pyro4.expose
-    def turnoff(self, aname):
-        logger.info('PyroHandler.turnoff("%s") called' % aname)
-        if aname in OUTPUTS.keys():
-            with self.lock:
-                return OUTPUTS[aname].turnoff()
-        else:
-            return None
+    def turnoff(self, anames):
+        logger.info('PyroHandler.turnoff(%s) called' % anames)
+        retlist = []
+        for aname in anames:
+            if aname.upper() in OUTPUTS.keys():
+                with self.lock:
+                    retlist.append(OUTPUTS[aname.upper()].turnoff())
+            else:
+                retlist.append(None)
+        return retlist
 
     @Pyro4.expose
-    def ison(self, aname):
-        logger.info('PyroHandler.ison("%s") called' % aname)
-        if aname in OUTPUTS.keys():
-            with self.lock:
-                return OUTPUTS[aname].ison()
-        else:
-            return None
+    def ison(self, anames):
+        logger.info('PyroHandler.ison(%s) called' % anames)
+        retlist = []
+        for aname in anames:
+            if aname.upper() in OUTPUTS.keys():
+                with self.lock:
+                    retlist.append(OUTPUTS[aname.upper()].ison())
+            else:
+                retlist.append(None)
+        return retlist
 
     @Pyro4.expose
     def version(self):

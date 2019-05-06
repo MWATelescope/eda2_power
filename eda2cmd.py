@@ -8,6 +8,8 @@ import sys
 import warnings
 
 import Pyro4
+from Pyro4 import util
+Pyro4.config.DETAILED_TRACEBACK = True
 
 sys.excepthook = Pyro4.util.excepthook
 
@@ -16,8 +18,8 @@ warnings.simplefilter('ignore', UserWarning)
 SLAVEPORT = 19999  # Network port for for Pyro4 server on the remote Raspberry Pi
 
 USAGE = """
-Usage: '%s <command> [<name>]' runs the specified command. Some commands
-        accept an output name - eg 'A2' or 'D7'.
+Usage: '%s <command> [<names>]' runs the specified command. 
+        Some commands accept one or more output names - eg 'A2' or 'D7'.
 
         The command can be:
             ping (check to see if we can communicate)
@@ -25,9 +27,9 @@ Usage: '%s <command> [<name>]' runs the specified command. Some commands
             turn_all_on (turn on all outputs)
             turn_all_off (turn off all outputs)
             
-            ison <name> (query whether output <name> is turned on)
-            turnon <name> (turn on output <name>)
-            turnoff <name> (turn off output <name>)
+            ison <names> (query whether output <name> is turned on)
+            turnon <names> (turn on output <name>)
+            turnoff <names> (turn off output <name>)
 
             reboot (reboot the Raspberry Pi - DANGEROUS)
             shutdown (shutdown & HALT the Raspberry Pi - VERY DANGEROUS)
@@ -36,8 +38,13 @@ Usage: '%s <command> [<name>]' runs the specified command. Some commands
             read_env (print temperature and humidity inside the unit)
             version (print the software version number for each output)
 
-       <name> is an upper case letter (A, B, C or D) followed by a digit 
-       from 1-8, eg 'A2' or 'D7' (without the quotes).
+       <names> is a list of one or more output names, each of which is an
+       upper case letter (A, B, C or D) followed by a digit from 1-8, eg
+       'A2' or 'D7' (without the quotes).
+       
+       You can also specify a single letter (A, B, C, or D) which will be
+       expanded to all 8 outputs in that bank (eg B1, B2, ... B8), or the 
+       word 'all', which will be expanded to all 32 outputs (A1 .. D8).
 """ % sys.argv[0]
 
 RWARNING = """
@@ -93,9 +100,20 @@ if __name__ == '__main__':
         print USAGE
         sys.exit(-1)
 
-    oname = ''
-    if len(args) > 1:
-        oname = args[1].upper()
+    onames = []
+    for arg in args[1:]:
+        if arg.upper() in 'ABCD':
+            for digit in '12345678':
+                onames.append('%s%s' % (arg.upper(), digit))
+        elif (len(arg) == 2) and (arg[0] in 'ABCDabcd') and (arg[1] in '12345678'):
+            onames.append(arg.upper())
+        elif arg.upper() == 'ALL':
+            onames = []
+            for letter in 'ABCD':
+                for digit in '12345678':
+                    onames.append('%s%s' % (letter, digit))
+            break
+    onames.sort()
 
     proxy = Pyro4.Proxy('PYRO:eda2@%s.mwa128t.org:%d' % (cname, SLAVEPORT))
 
@@ -111,19 +129,20 @@ if __name__ == '__main__':
         result = proxy.turn_all_off()
         print('All OFF')
     elif action == 'ison':
-        result = proxy.ison(oname)
-        print({False:'OFF', True:'ON'}[result])
+        result = proxy.ison(onames)
+        for i in range(len(onames)):
+            print('%s: %s' % (onames[i], {False:'OFF', True:'ON'}[result[i]]))
     if action == 'turnon':
-        result = proxy.turnon(oname)
-        print('%s turned ON' % oname)
+        result = proxy.turnon(onames)
+        print('%s turned ON' % ', '.join(onames))
     elif action == 'turnoff':
-        result = proxy.turnoff(oname)
-        print('%s turned OFF' % oname)
+        result = proxy.turnoff(onames)
+        print('%s turned OFF' % ', '.join(onames))
     if action == 'status':
         result = proxy.get_powers()
         for letter in 'ABCD':
-            for number in range(1,9):
-                name = '%s%d' % (letter, number)
+            for digit in '12345678':
+                name = '%s%s' % (letter, digit)
                 if name in result.keys():
                     if len(result[name]) == 3:
                         pstate, v, i = result[name]
@@ -144,4 +163,3 @@ if __name__ == '__main__':
         else:
             humidity, temperature = result
             print('Temp=%4.1f degC, Humidity=%2.0f %%' % (temperature, humidity))
-
