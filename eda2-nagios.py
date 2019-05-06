@@ -34,7 +34,7 @@ def main(powers=None, env_data=None):
                 if (name in powers) and powers[name]:
                     pstate, v, i = powers[name]
                     # On/off only human readable, voltage only in performance params, current in both
-                    oparams.append('%s_state=%s' % (name, {False:'OFF', True:'ON'}[powers[name]]))
+                    oparams.append('%s_state=%s' % (name, {False:'OFF', True:'ON'}[pstate]))
                     pparams.append('%s_volts=%6.3f' % (name, v))
                     oparams.append('%s_mA=%7.3f' % (name, i))
                     pparams.append('%s_mA=%7.3f' % (name, i))
