@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-"""Nagios plugin to interrogate a BFIF control host (the Raspberry Pi) and
+"""Nagios plugin to interrogate a EDA2/FNDH control host (the Raspberry Pi) and
    return formatted Nagios plugin output giving system health and other
    parameters.
 """

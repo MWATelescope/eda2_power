@@ -1,6 +1,17 @@
 #!/usr/bin/python
 
-"""Command line utility to call methods on the EDA2 (FNDH) power supply controllers using Pyro4.
+"""
+Command line utility to call methods on the EDA2 (FNDH) power supply controllers remotely,
+over the network, using Pyro4 RPC calls.
+
+Usage information available using the --help argument.
+
+Designed to be run from a symlink to this file, where the name of the symlink is equal to the
+host name of the Raspberry Pi computer controlling the FNDH.
+
+Written by Andrew Williams (Andrew.Williams@curtin.edu.au).
+
+
 """
 
 import os
@@ -18,7 +29,7 @@ warnings.simplefilter('ignore', UserWarning)
 SLAVEPORT = 19999  # Network port for for Pyro4 server on the remote Raspberry Pi
 
 USAGE = """
-Usage: '%s <command> [<names>]' runs the specified command. 
+Usage: '%s <command> [<names>]' runs the specified command on host %s. 
         Some commands accept one or more output names - eg 'A2' or 'D7'.
 
         The command can be:
@@ -45,7 +56,7 @@ Usage: '%s <command> [<names>]' runs the specified command.
        You can also specify a single letter (A, B, C, or D) which will be
        expanded to all 8 outputs in that bank (eg B1, B2, ... B8), or the 
        word 'all', which will be expanded to all 32 outputs (A1 .. D8).
-""" % sys.argv[0]
+""" % (sys.argv[0], sys.argv[0])
 
 RWARNING = """
       DANGER! Only run the reboot command when absolutely necessary. If the
@@ -67,7 +78,7 @@ lastoutput = ''  # Last line printed, to compare against new output line.
 if __name__ == '__main__':
     cname = os.path.split(sys.argv[0])[-1]
     if cname == 'eda2cmd.py':
-        print('Run this command symlinked to the name of the host to communicate with - fndh1 or fndh2')
+        print('Run this command symlinked to the name of the host to communicate with - eg fndh1 or fndh2')
         sys.exit(-1
                  )
     args = sys.argv[1:]

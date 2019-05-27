@@ -1,9 +1,13 @@
 #!/usr/bin/python
 
 """
-Code to run on the Raspberry Pi connected to the prototype EDA2 power control unit.
+Code to run on the Raspberry Pi connected to the prototype EDA2 power control unit, also known
+as a Field Node Distribution Hub (FNDH).
 
-Use as:
+Written by Andrew Williams (Andrew.Williams@curtin.edu.au).
+
+Designed to be controlled remotely over the network using eda2cmd.py, but can be imported
+as a library to control outputs manually:
 
 pi@raspberrypi:~ $ cd eda2_power/
 pi@raspberrypi:~/eda2_power $ sudo python
@@ -179,7 +183,7 @@ def init():
 
 ##################################################################################
 #
-# Functions to handle clean shutdown on exit
+# Functions to handle clean shutdown on exit.
 #
 ##################################################################################
 
@@ -189,13 +193,8 @@ def cleanup():
       Called automatically on exit, either a normal program exit (eg, sys.exit()) or
       after trapping a signal. Note that 'kill -9' can NOT be trapped, in
       which case this cleanup function will NOT run.
-
-      NOTE - GPIO.cleanup() is NOT called by this function, as that returns all GPIO pins
-             to tristate mode, and in the prototype, this turns the fibre media converter
-             (the Aux power supply) OFF, so we can't communicate with the Raspberry Pi.
     """
-    # Turn off the charge FETs and all other BL233 output pins using the direct serial interface, in case of a deadlock on
-    # the SPIU lock or some other problem with the SPIUHandler() code.
+    # Turn off all the output FETs:
     global OUTPUTS, SMBUS
     try:
         turn_all_off()
@@ -203,6 +202,7 @@ def cleanup():
     except:
         logger.exception('cleanup() - FAILED to turn off outputs on cleanup. : %s', traceback.format_exc())
 
+    # Shut down the RPC handler thread:
     try:
         if PYROHANDLER is not None:
             PYROHANDLER.exit = True
@@ -211,6 +211,7 @@ def cleanup():
     except:
         logger.exception('cleanup() - FAILED to shut down Pyro handler. : %s', traceback.format_exc())
 
+    # Clean up the GPIO library and tri-state all the Raspberry Pi GPIO output pins, close the I2C bus:
     try:
         GPIO.cleanup()
         if SMBUS is not None:
@@ -238,7 +239,6 @@ def SignalHandler(signum=None, frame=None):
     logger.critical("SignalHandler() - Signal %d received." % signum)
     cleanup()
     sys.exit(-signum)  # Called by signal handler, so exit with a return code indicating the signal received, AFTER
-    # calling the cleanup function registered by the atexit.register() call in RegisterCleanup()
 
 
 def RegisterCleanup(func):
@@ -264,6 +264,13 @@ def RegisterCleanup(func):
     atexit.register(CLEANUP_FUNCTION)
 
 
+##################################################################################
+#
+# Class to handle reading data from the MCP3208 A/D convert chips
+# to read voltage and current for each output.
+#
+##################################################################################
+
 class ADC_Set(object):
     """
     Handles communication with all eight of the MCP3208 A/D converter chips, and the 74X138 3-to-8 decoder chip
@@ -286,7 +293,7 @@ class ADC_Set(object):
 
         The mapping is:
 
-        number  signal name
+        number  signal name on schematic
         0       CS-X8
         1       CS-X6
         2       CS-X4
@@ -295,8 +302,6 @@ class ADC_Set(object):
         5       CS-X3
         6       CS-X5
         7       CS-X7
-
-        Note that the only currently populated 3208 chip, IC13, is on CS-X1 connected to output number 4.
 
         :param number: integer from 0-7 to enable an output on the 74X138, None to disable all outputs.
         :return: True for success, False if there was an error.
@@ -332,11 +337,9 @@ class ADC_Set(object):
         Communications uses the SPI bus (GPIO pins 19, 21 and 23) to talk to the MCP3208, and three GPIO pins (31, 32, 33)
         to select the right chip using the 74X138.
 
-        Note that this function doesn't currently return valid results, and needs further work.
-
         :param chipnum: number from 0-7 to send to the 74X138, to write the correct chip enable (see above)
         :param channel: input channel (0-7) number on the 3208 chip to read.
-        :return: The raw 12 bit value
+        :return: The raw 12 bit value from the A/D converter (0-4095).
         """
         with self.lock:
             self._chip_select(number=chipnum)
@@ -348,6 +351,12 @@ class ADC_Set(object):
             self._chip_select(number=None)
         return 256 * (r[1] & 0b1111) + r[2]
 
+
+##################################################################################
+#
+# Class to handle turning the output FETs on and off using the two PCA6416A chips.
+#
+##################################################################################
 
 class I2C_Control(object):
     """
@@ -373,7 +382,7 @@ class I2C_Control(object):
             logger.error('Invalid 6416 instance (must be 1 or 2, not %d)' % instance)
             return
 
-        self.portmap = [0] * 16  # Defaults to all outputs off.
+        self.portmap = [0] * 16  # Start with all outputs off.
         with I2C_LOCK:
             SMBUS.write_i2c_block_data(self.address, 2, [0, 0])  # Write 0,0 to output registers, to make sure outputs are off
             SMBUS.write_i2c_block_data(self.address, 4, [0, 0])  # Write 0,0 to polarity inversion register, for no inversion
@@ -388,7 +397,7 @@ class I2C_Control(object):
         :return: True
         """
         with I2C_LOCK:
-            SMBUS.write_i2c_block_data(self.address, 2, [p1, p2])  # Write 0,0 to output registers, to make sure outputs are off
+            SMBUS.write_i2c_block_data(self.address, 2, [p1, p2])
         return True
 
     def turnon(self, channel=0):
@@ -436,6 +445,13 @@ class I2C_Control(object):
         return True
 
 
+##################################################################################
+#
+# Class to represent a single switchable 48V output. Supports turning it off and
+# on, and reading the current and voltage.
+#
+##################################################################################
+
 class Antenna(object):
     """
     Class to represent one antenna power outlet. It can be turned on or off, and its voltage
@@ -446,6 +462,18 @@ class Antenna(object):
     """
 
     def __init__(self, name):
+        """
+        Instance creation - set up the correct pcontrol, con_chan, chipnum, v_chan and i_chan attributes
+        for the given antenna name provided.
+
+        self.pcontrol: A global I2C_Control object with instance=1 or instance=2 depending on output name
+        self.con_chan: Channel number (1-16) within the given I2C_Control object for this port, defined above
+        self.chip_num: Which MCP3208 chip (0-7) to use for current and voltage measurements for this output
+        self.v_chan:   Which (0-7) of the 8 A/D chip channels to read for the voltage on this output
+        self.i_chan:   Which (0-7) of the 8 A/D chip channels to read for the current on this output
+
+        :param name: The name of this output port (one of A1-A8, B1-B8, C1-C8 or D1-D8).
+        """
         self.name = name
         assert (type(name) == str) and (len(name) == 2)
         assert name.upper() in CHIPMAP
@@ -458,20 +486,34 @@ class Antenna(object):
         self._poweron = False
 
     def turnon(self):
+        """
+        Turn on this output now.
+        :return: True
+        """
         self.pcontrol.turnon(self.con_chan)
         self._poweron = True
         return True
 
     def turnoff(self):
+        """
+        Turn off this output now.
+        :return: True
+        """
         self.pcontrol.turnoff(self.con_chan)
         self._poweron = False
         return True
 
     def ison(self):
+        """
+        Test to see if this output is turned on or off.
+        :return: True if this output is turned on, False if not.
+        """
         return self._poweron
 
     def sense(self):
-        """Returns a tuple of (voltage, current) in Volts and milliAmps respectively
+        """Returns a tuple of (state, voltage, current) where state is 'ON' or 'OFF, and
+           voltage and current are in Volts and milliAmps respectively.
+           :return (state, voltage, current) tuple, where state is 'ON' or 'OFF, voltage is in Volts and current is in mA.
         """
         try:
             v_raw = ADCS.readADC(chipnum=self.chipnum, channel=self.v_chan)
@@ -491,6 +533,12 @@ class Antenna(object):
             return '<%s: %3s: %6.3f V, %6.3f mA>' % (self.name, pstate, v, i)
 
 
+##################################################################################
+#
+# Class to handle remote control via RPC calls over the network.
+#
+##################################################################################
+
 class PyroHandler(object):
     """Implements Pyro4 methods for power supply control (startup, shutdown).
     """
@@ -508,18 +556,35 @@ class PyroHandler(object):
 
     @Pyro4.expose
     def turn_all_off(self):
+        """
+        Turn all the outputs off, with short delays in between each output to avoid power surges.
+
+        :return: None
+        """
         logger.info('PyroHandler.turn_all_off() called')
         with self.lock:
             return turn_all_off()
 
     @Pyro4.expose
     def turn_all_on(self):
+        """
+        Turn all the outputs on, with short delays in between each output to avoid power surges.
+
+        :return: None
+        """
         logger.info('PyroHandler.turn_all_on() called')
         with self.lock:
             return turn_all_on()
 
     @Pyro4.expose
     def get_powers(self):
+        """
+        Get output switch state, voltage and current for each of the switchable 48V outputs.
+
+        :return: Dictionary with output name as the key ('A1', 'C8', etc), and the value
+                 is a tuple of (state, voltage, current) where state is 'ON' or 'OFF, and
+                 voltage and current are in Volts and milliAmps respectively.
+        """
         logger.info('PyroHandler.get_powers() called')
         with self.lock:
             results = {}
@@ -529,36 +594,69 @@ class PyroHandler(object):
 
     @Pyro4.expose
     def read_environment(self):
+        """
+        Reads the the HIH7120 humidity/temperature sensor and return the relative humidity as a percenteage,
+        and the temperature in deg C.
+
+        :return: a tuple of (humidity, temperature) where humidity is a percenteage and temperature is in deg C
+        """
         logger.info('PyroHandler.read_environment() called')
         with self.lock:
             return read_environment()
 
     @Pyro4.expose
     def turnon(self, anames):
+        """
+        Turn on all of the outputs given in the list of names supplied, with a 50ms delay between each output.
+
+        :param anames: A list of strings, each a two-character output name consisting of a letter (A,B,C or D)
+                       and a digit from 1 to 8.
+        :return: A list of values, one per output name supplied, each being True if that output was turned on,
+                 or None if that name isn't a valid output.
+        """
         logger.info('PyroHandler.turnon(%s) called' % anames)
         retlist = []
         for aname in anames:
             if aname.upper() in OUTPUTS.keys():
                 with self.lock:
                     retlist.append(OUTPUTS[aname.upper()].turnon())
+                time.sleep(0.05)
             else:
                 retlist.append(None)
         return retlist
 
     @Pyro4.expose
     def turnoff(self, anames):
+        """
+        Turn off all of the outputs given in the list of names supplied, with a 50ms delay between each output.
+
+        :param anames: A list of strings, each a two-character output name consisting of a letter (A,B,C or D)
+                       and a digit from 1 to 8.
+        :return: A list of values, one per output name supplied, each being True if that output was turned off,
+                 or None if that name isn't a valid output.
+        """
         logger.info('PyroHandler.turnoff(%s) called' % anames)
         retlist = []
         for aname in anames:
             if aname.upper() in OUTPUTS.keys():
                 with self.lock:
                     retlist.append(OUTPUTS[aname.upper()].turnoff())
+                time.sleep(0.05)
             else:
                 retlist.append(None)
         return retlist
 
     @Pyro4.expose
     def ison(self, anames):
+        """
+        Test to see if each of the output names specified is on or off.
+
+        :param anames: A list of strings, each a two-character output name consisting of a letter (A,B,C or D)
+                       and a digit from 1 to 8.
+        :return: A list of values, one per output name supplied, each being True if the output is turned on,
+                 False if it's turned off, or None if that name isn't a valid output.
+        """
+
         logger.info('PyroHandler.ison(%s) called' % anames)
         retlist = []
         for aname in anames:
@@ -571,13 +669,17 @@ class PyroHandler(object):
 
     @Pyro4.expose
     def version(self):
+        """
+        Returns the software version string
+        :return: string containing the software version.
+        """
         logger.info('Pyrohandler.version() called')
         return VERSION
 
     @Pyro4.expose
     def reboot(self):
-        """Reboot the SBC - don't bother acquire a lock, we don't want to block waiting for something else to
-           finish.
+        """Reboot the control computer - don't bother acquire a lock, we don't want to block waiting for
+           something else to finish.
         """
         logger.info('PyroHandler.reboot() called')
         cleanup()
@@ -588,11 +690,10 @@ class PyroHandler(object):
 
     @Pyro4.expose
     def shutdown(self):
-        """Does a full, safe shutdown, including leaving thermal control in a safe state
-             for when power returns, or until power is actually cut off.
+        """Does a full, safe shutdown of the control computer (a Raspberry Pi).
 
-             BEWARE! This halts the SBC, so the only way to recover is to physically cycle the power
-                     to that receiver!
+           BEWARE! This halts the Raspberry Pi, so the only way to recover is to physically cycle the power
+                   to the box!
         """
         logger.info('PyroHandler.shutdown() called')
         cleanup()
@@ -602,7 +703,15 @@ class PyroHandler(object):
         return True
 
     def servePyroRequests(self):
-        """When called, start serving Pyro requests.
+        """When called, start serving Pyro requests. This function loops forever (until the 'exit'
+           attribute on this object is set), restarting the low-level Pyro4 daemon request loop that
+           listens for and handles incoming RPC calls whenever it exits.
+
+           The signal handler can shut this function down cleanly on exit by first setting self.exit to True,
+           and then calling self.pyro_daemon.shutdown().
+
+           This function does not exit unless some other thread sets the 'exit' attribute on this object, and then
+           the pyro_daemon.requestLoop() function exits for some reason.
         """
         iface = None
         logger.info('Getting interface address for Pyro server')
@@ -636,12 +745,18 @@ class PyroHandler(object):
         logger.info('Shutting down server.')
 
 
+##################################################################################
+#
+# Utility functions
+#
+##################################################################################
+
 def read_environment():
     """
     Reads the the HIH7120 humidity/temperature sensor on address 0x27, and return the relative humidity as a percenteage,
     and the temperature in deg C.
 
-    :return: a tuple of (humidity, temperature)
+    :return: a tuple of (humidity, temperature) where humidity is a percenteage and temperature is in deg C
     """
     try:
         with I2C_LOCK:
@@ -705,6 +820,13 @@ def monitorloop():
             print
         logger.info('Waiting for 30 seconds')
         time.sleep(30)
+
+
+##################################################################################
+#
+# Main code
+#
+##################################################################################
 
 
 if __name__ == '__main__':
