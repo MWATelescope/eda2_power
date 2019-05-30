@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 """
 Command line utility to call methods on the EDA2 (FNDH) power supply controllers remotely,
