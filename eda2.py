@@ -223,6 +223,7 @@ def cleanup():
     logger.info('cleanup() finished, exiting.')
 
 
+# noinspection PyUnusedLocal
 def SignalHandler(signum=None, frame=None):
     """
       Called when a signal is received that would result in the programme exit, if the
