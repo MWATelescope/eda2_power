@@ -135,20 +135,32 @@ if __name__ == '__main__':
             print("OK.")
     elif action == 'turn_all_on':
         result = proxy.turn_all_on()
-        print('All ON')
+        if result:
+            print('All ON')
+        else:
+            print('Error turning outputs on, output state unknown.')
     if action == 'turn_all_off':
         result = proxy.turn_all_off()
-        print('All OFF')
+        if result:
+            print('All OFF')
+        else:
+            print('Error turning outputs off, output state unknown.')
     elif action == 'ison':
         result = proxy.ison(onames)
         for i in range(len(onames)):
             print('%s: %s' % (onames[i], {False:'OFF', True:'ON'}[result[i]]))
     if action == 'turnon':
         result = proxy.turnon(onames)
-        print('%s turned ON' % ', '.join(onames))
+        if False in result:
+            print('%s turned ON' % ', '.join(onames))
+        else:
+            print('Error turning output/s on, output state unknown. Result=%s' % zip(onames, result))
     elif action == 'turnoff':
         result = proxy.turnoff(onames)
-        print('%s turned OFF' % ', '.join(onames))
+        if False in result:
+            print('%s turned OFF' % ', '.join(onames))
+        else:
+            print('Error turning output/s off, output state unknown. Result=%s' % zip(onames, result))
     if action == 'status':
         result = proxy.get_powers()
         for letter in 'ABCD':
