@@ -62,7 +62,7 @@ import smbus
 
 import spidev
 
-VERSION = '0.8.2'
+VERSION = '0.8.3'
 
 USAGE = """
 EDA2 power controller.
@@ -398,14 +398,15 @@ class I2C_Control(object):
 
         :param p1: port 1 output data (0-255)
         :param p2: port 2 output data (0-255)
-        :return: True
+        :return: True if there was no error, False if there was a communications error
         """
         with I2C_LOCK:
             try:
                 SMBUS.write_i2c_block_data(self.address, 2, [p1, p2])
+                return True
             except IOError:
                 logger.error('Exception in I2C communications: %s' % traceback.format_exc())
-        return True
+                return False
 
     def turnon(self, channel=0):
         """
@@ -426,8 +427,7 @@ class I2C_Control(object):
             self.portmap[channel - 1] = 1
             p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
-            self._write_outputs(p1=p1, p2=p2)
-        return True
+            return self._write_outputs(p1=p1, p2=p2)
 
     def turnoff(self, channel=0):
         """
@@ -448,8 +448,7 @@ class I2C_Control(object):
             self.portmap[channel - 1] = 0
             p1 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[:8]), 2)
             p2 = int('%d%d%d%d%d%d%d%d' % tuple(self.portmap[8:]), 2)
-            self._write_outputs(p1=p1, p2=p2)
-        return True
+            return self._write_outputs(p1=p1, p2=p2)
 
 
 ##################################################################################
@@ -497,18 +496,20 @@ class Antenna(object):
         Turn on this output now.
         :return: True
         """
-        self.pcontrol.turnon(self.con_chan)
-        self._poweron = True
-        return True
+        ok = self.pcontrol.turnon(self.con_chan)
+        if ok:
+            self._poweron = True
+        return ok
 
     def turnoff(self):
         """
         Turn off this output now.
         :return: True
         """
-        self.pcontrol.turnoff(self.con_chan)
-        self._poweron = False
-        return True
+        ok = self.pcontrol.turnoff(self.con_chan)
+        if ok:
+            self._poweron = False
+        return ok
 
     def ison(self):
         """
@@ -785,18 +786,30 @@ def read_environment():
 
 def turn_all_on():
     """Turn on all the outputs, with a 50ms delay between each output.
+
+       :return: True if all outputs were switched without error, False otherwise.
     """
+    allok = True
     for output in OUTPUTS.values():
-        output.turnon()
+        ok = output.turnon()
+        if not ok:
+            allok = False
         time.sleep(0.05)
+    return allok
 
 
 def turn_all_off():
     """Turn off all the outputs, with a 50ms delay between each output.
+
+       :return: True if all outputs were switched without error, False otherwise.
     """
+    allok = True
     for output in OUTPUTS.values():
-        output.turnoff()
+        ok = output.turnoff()
+        if not ok:
+            allok = False
         time.sleep(0.05)
+    return allok
 
 
 def rfiloop():
