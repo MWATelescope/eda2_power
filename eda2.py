@@ -62,7 +62,7 @@ import smbus
 
 import spidev
 
-VERSION = '0.8.1'
+VERSION = '0.8.2'
 
 USAGE = """
 EDA2 power controller.
@@ -385,9 +385,12 @@ class I2C_Control(object):
 
         self.portmap = [0] * 16  # Start with all outputs off.
         with I2C_LOCK:
-            SMBUS.write_i2c_block_data(self.address, 2, [0, 0])  # Write 0,0 to output registers, to make sure outputs are off
-            SMBUS.write_i2c_block_data(self.address, 4, [0, 0])  # Write 0,0 to polarity inversion register, for no inversion
-            SMBUS.write_i2c_block_data(self.address, 6, [0, 0])  # Write 0,0 to configuration register, to set pins to outputs
+            try:
+                SMBUS.write_i2c_block_data(self.address, 2, [0, 0])  # Write 0,0 to output registers, to make sure outputs are off
+                SMBUS.write_i2c_block_data(self.address, 4, [0, 0])  # Write 0,0 to polarity inversion register, for no inversion
+                SMBUS.write_i2c_block_data(self.address, 6, [0, 0])  # Write 0,0 to configuration register, to set pins to outputs
+            except IOError:
+                logger.error('Exception in I2C communications: %s' % traceback.format_exc())
 
     def _write_outputs(self, p1=0, p2=0):
         """
@@ -398,7 +401,10 @@ class I2C_Control(object):
         :return: True
         """
         with I2C_LOCK:
-            SMBUS.write_i2c_block_data(self.address, 2, [p1, p2])
+            try:
+                SMBUS.write_i2c_block_data(self.address, 2, [p1, p2])
+            except IOError:
+                logger.error('Exception in I2C communications: %s' % traceback.format_exc())
         return True
 
     def turnon(self, channel=0):
@@ -761,9 +767,12 @@ def read_environment():
     """
     try:
         with I2C_LOCK:
-            SMBUS.write_quick(0x27)
-            time.sleep(0.11)  # Wait 110ms for conversion
-            data = SMBUS.read_i2c_block_data(0x27, 0, 4)
+            try:
+                SMBUS.write_quick(0x27)
+                time.sleep(0.11)  # Wait 110ms for conversion
+                data = SMBUS.read_i2c_block_data(0x27, 0, 4)
+            except:
+                logger.error('Exception in I2C communications: %s' % traceback.format_exc())
         h_raw = (data[0] & 63) * 256 + data[1]
         humidity = h_raw / 16382.0 * 100.0
         t_raw = (data[0] * 256 + data[1]) / 4
