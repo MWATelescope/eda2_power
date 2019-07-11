@@ -151,13 +151,13 @@ if __name__ == '__main__':
             print('%s: %s' % (onames[i], {False:'OFF', True:'ON'}[result[i]]))
     if action == 'turnon':
         result = proxy.turnon(onames)
-        if False in result:
+        if False not in result:
             print('%s turned ON' % ', '.join(onames))
         else:
             print('Error turning output/s on, output state unknown. Result=%s' % zip(onames, result))
     elif action == 'turnoff':
         result = proxy.turnoff(onames)
-        if False in result:
+        if False not in result:
             print('%s turned OFF' % ', '.join(onames))
         else:
             print('Error turning output/s off, output state unknown. Result=%s' % zip(onames, result))
