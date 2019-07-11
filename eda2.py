@@ -62,7 +62,7 @@ import smbus
 
 import spidev
 
-VERSION = '0.8.3'
+VERSION = '0.8.4'
 
 USAGE = """
 EDA2 power controller.
@@ -774,6 +774,7 @@ def read_environment():
                 data = SMBUS.read_i2c_block_data(0x27, 0, 4)
             except:
                 logger.error('Exception in I2C communications: %s' % traceback.format_exc())
+                return None
         h_raw = (data[0] & 63) * 256 + data[1]
         humidity = h_raw / 16382.0 * 100.0
         t_raw = (data[0] * 256 + data[1]) / 4
