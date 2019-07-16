@@ -390,7 +390,7 @@ class I2C_Control(object):
                 SMBUS.write_i2c_block_data(self.address, 4, [0, 0])  # Write 0,0 to polarity inversion register, for no inversion
                 SMBUS.write_i2c_block_data(self.address, 6, [0, 0])  # Write 0,0 to configuration register, to set pins to outputs
             except IOError:
-                logger.error('Exception in I2C communications: %s' % traceback.format_exc())
+                logger.error('Exception in I2C communications for i2c address %d: %s' % (self.address, traceback.format_exc()))
 
     def _write_outputs(self, p1=0, p2=0):
         """
@@ -822,13 +822,12 @@ def rfiloop():
             for letter in 'ABCD':
                 name = '%s%s' % (letter, number)
                 OUTPUTS[name].turnon()
-                time.sleep(0.5)
-                logger.debug(OUTPUTS[name])
+                time.sleep(0.01)
+#                logger.debug(OUTPUTS[name])
                 OUTPUTS[name].turnoff()
-                time.sleep(0.5)
-            print
-        logger.info('Waiting for 24 seconds')
-        time.sleep(24)
+                time.sleep(0.01)
+#        logger.info('Waiting for 24 seconds')
+#        time.sleep(24)
 
 
 def monitorloop():
