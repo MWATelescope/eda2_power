@@ -862,6 +862,9 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
 
+    print "Turning on all outputs!"
+    turn_all_on()
+
     PYROHANDLER = PyroHandler()
 
     if options.rfi:
