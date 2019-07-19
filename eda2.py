@@ -62,7 +62,7 @@ import smbus
 
 import spidev
 
-VERSION = '0.8.4'
+VERSION = '0.9.0'
 
 USAGE = """
 EDA2 power controller.
@@ -813,21 +813,27 @@ def turn_all_off():
     return allok
 
 
-def rfiloop():
+def rfiloop(fast=False):
     """Loop forever, turning outputs on and off for RFI testing. Does not exit.
     """
     logger.info('RFI loop starting.')
+    if fast:
+        delay = 0.01
+    else:
+        delay = 0.5
     while not PYROHANDLER.exit:
         for number in '12345678':
             for letter in 'ABCD':
                 name = '%s%s' % (letter, number)
                 OUTPUTS[name].turnon()
-                time.sleep(0.01)
-#                logger.debug(OUTPUTS[name])
+                time.sleep(delay)
+                if not fast:
+                    logger.debug(OUTPUTS[name])
                 OUTPUTS[name].turnoff()
-                time.sleep(0.01)
-#        logger.info('Waiting for 24 seconds')
-#        time.sleep(24)
+                time.sleep(delay)
+        if not fast:
+            logger.info('Waiting for 24 seconds')
+            time.sleep(24)
 
 
 def monitorloop():
@@ -859,17 +865,21 @@ if __name__ == '__main__':
     parser = optparse.OptionParser(version="%prog")
     parser.add_option("--rfi", dest="rfi", action='store_true', default=False,
                       help="Loop forever in RFI test mode")
-
+    parser.add_option("--allon", dest="allon", action="store_true", default=False,
+                      help="Turn all outputs ON at startup")
+    parser.add_option("--fast", dest="fast", action="store_true", default=False,
+                      help="Do RFI loop sending I2C comms every 10ms, instead of every 500ms")
+    parser.add_option("--nopyro", dest="nopyro", action="store_true", default=False,
+                      help="Disable PYRO remote network support to supress error messages")
     (options, args) = parser.parse_args()
 
-    print "Turning on all outputs!"
-    turn_all_on()
-
-    PYROHANDLER = PyroHandler()
+    if options.allon:
+        print "Turning on all outputs!"
+        turn_all_on()
 
     if options.rfi:
         logger.debug('About to start RFI loop.')
-        rfithread = threading.Thread(target=rfiloop, name='RFIloop')
+        rfithread = threading.Thread(target=rfiloop, name='RFIloop', kwargs={'fast':options.fast})
         rfithread.daemon = True  # Stop this thread when the main program exits.
         rfithread.start()
     else:
@@ -878,11 +888,16 @@ if __name__ == '__main__':
         monthread.daemon = True  # Stop this thread when the main program exits.
         monthread.start()
 
-    # Start up the Pyro communications loop, to accept incoming commands.
-    logger.debug('About to start Pyro loop.')
-    pyrothread = threading.Thread(target=PYROHANDLER.servePyroRequests, name='Pyroloop')
-    pyrothread.daemon = True  # Stop this thread when the main program exits.
-    pyrothread.start()
+    if not options.nopyro:
+        PYROHANDLER = PyroHandler()
 
-    while not PYROHANDLER.exit:
-        time.sleep(1)
+        # Start up the Pyro communications loop, to accept incoming commands.
+        logger.debug('About to start Pyro loop.')
+        pyrothread = threading.Thread(target=PYROHANDLER.servePyroRequests, name='Pyroloop')
+        pyrothread.daemon = True  # Stop this thread when the main program exits.
+        pyrothread.start()
+        while not PYROHANDLER.exit:
+            time.sleep(1)
+    else:
+        while True:
+            time.sleep(1)
