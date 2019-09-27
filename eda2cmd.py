@@ -206,7 +206,7 @@ if __name__ == '__main__':
                 else:
                     ostrings.append('%s: Unknown.' % oname)
             print('Tile %2d: %s,  %s' % (tid, ostrings[0], ostrings[1]))
-        print('Voltages from %6.3v - %6.3v, Currents from %7.3f - %7.3f' % (min(voltages),
+        print('Voltages from %6.3f to %6.3f V, Currents from %7.3f to %7.3f mA' % (min(voltages),
                                                                             max(voltages),
                                                                             min(currents),
                                                                             max(currents)))
