@@ -73,6 +73,23 @@ SWARNING = """
 
 """
 
+NMAP = {1: ['C5', 'C6'],
+        2: ['D5', 'D6'],
+        3: ['A7', 'A8'],
+        4: ['A3', 'A4'],
+        5: ['A1', 'A2'],
+        6: ['B7', 'B8'],
+        7: ['C1', 'C2'],
+        8: ['B3', 'B4'],
+        9: ['B1', 'B2'],
+        10:['C3', 'C4'],
+        11:['D1', 'D2'],
+        12:['C7', 'C8'],
+        13:['D3', 'D4'],
+        14:['D7', 'D8'],
+        15:['A5', 'A6'],
+        16:['B5', 'B6']}
+
 lastoutput = ''  # Last line printed, to compare against new output line.
 
 if __name__ == '__main__':
@@ -85,30 +102,30 @@ if __name__ == '__main__':
     tlist = []
     action = ''
     if (len(args) < 1) or (args[0].lower() in ['h', 'help', '-h', '-help', '--h', '--help', '?', '-?', '--?']):
-        print USAGE
+        print(USAGE)
         sys.exit(0)
 
     if args[0] == 'reboot':
-        print RWARNING
+        print(RWARNING)
         answer = raw_input("Are you sure you want to continue? (y/n): ")
         if 'y' in answer.lower():
             action = 'reboot'
         else:
-            print "Aborting reboot"
+            print("Aborting reboot")
             sys.exit(-1)
     elif args[0] == 'shutdown':
-        print SWARNING
+        print(SWARNING)
         answer = raw_input("Are you sure you want to continue? (y/n): ")
         if 'y' in answer.lower():
             action = 'shutdown'
         else:
-            print "Aborting shutdown"
+            print("Aborting shutdown")
             sys.exit(-1)
     elif args[0] in ['ping', 'turn_all_on', 'turn_all_off', 'ison', 'turnon',
                      'turnoff', 'status', 'read_env', 'version']:
         action = args[0]
     else:
-        print USAGE
+        print(USAGE)
         sys.exit(-1)
 
     onames = []
@@ -118,6 +135,8 @@ if __name__ == '__main__':
                 onames.append('%s%s' % (arg.upper(), digit))
         elif (len(arg) == 2) and (arg[0] in 'ABCDabcd') and (arg[1] in '12345678'):
             onames.append(arg.upper())
+        elif arg.isdigit() and 1 <= int(arg) <= 16:   # Tile number, to be looked up in NMAP
+            onames += NMAP[int(arg)]
         elif arg.upper() == 'ALL':
             onames = []
             for letter in 'ABCD':
@@ -163,19 +182,21 @@ if __name__ == '__main__':
             print('Error turning output/s off, output state unknown. Result=%s' % zip(onames, result))
     if action == 'status':
         result = proxy.get_powers()
-        for letter in 'ABCD':
-            for digit in '12345678':
-                name = '%s%s' % (letter, digit)
-                if name in result.keys():
-                    if len(result[name]) == 3:
-                        pstate, v, i = result[name]
+        for tid in range(1,17):
+            onames = NMAP[tid]
+            ostrings = []
+            for oname in onames:
+                if oname in result.keys():
+                    if len(result[oname]) == 3:
+                        pstate, v, i = result[oname]
                     else:
-                        ison = proxy.ison(name)
+                        ison = proxy.ison(oname)
                         pstate = {False:'OFF', True:'ON'}[ison]
-                        v, i = result[name]
-                    print('<%s: %3s: %6.3f V, %6.3f mA>' % (name, pstate, v, i))
+                        v, i = result[oname]
+                    ostrings.append('<%s: %3s: %6.3f V, %6.3f mA>' % (oname, pstate, v, i))
                 else:
-                    print('%s: Unknown.' % name)
+                    ostrings.append('%s: Unknown.' % oname)
+            print('Tile %d: %s, %s' % (tid, ostrings[0], ostrings[1]))
     elif action == 'version':
         result = proxy.version()
         print('Software Version running on %s is: %s' % (cname, result))
