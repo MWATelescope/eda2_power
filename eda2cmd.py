@@ -202,11 +202,11 @@ if __name__ == '__main__':
                         v, i = result[oname]
                     voltages.append(v)
                     currents.append(i)
-                    ostrings.append('<%s %3s: %6.3f V, %7.3f mA>' % (oname, pstate, v, i))
+                    ostrings.append('<%s %3s: %4.1f V, %3.0f mA>' % (oname, pstate, v, i))
                 else:
                     ostrings.append('%s: Unknown.' % oname)
             print('Tile %2d: %s,  %s' % (tid, ostrings[0], ostrings[1]))
-        print('Voltages from %6.3f to %6.3f V, Currents from %7.3f to %7.3f mA' % (min(voltages),
+        print('Voltages from %4.1f to %4.1f V, Currents from %3.0f to %3.0f mA' % (min(voltages),
                                                                             max(voltages),
                                                                             min(currents),
                                                                             max(currents)))
