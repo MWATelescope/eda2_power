@@ -30,7 +30,7 @@ SLAVEPORT = 19999  # Network port for for Pyro4 server on the remote Raspberry P
 
 USAGE = """
 Usage: '%s <command> [<names>]' runs the specified command on host %s. 
-        Some commands accept one or more output names - eg 'A2' or 'D7'.
+        Some commands accept one or more output names - eg 'A2' or 3.
 
         The command can be:
             ping (check to see if we can communicate)
@@ -56,6 +56,11 @@ Usage: '%s <command> [<names>]' runs the specified command on host %s.
        You can also specify a single letter (A, B, C, or D) which will be
        expanded to all 8 outputs in that bank (eg B1, B2, ... B8), or the 
        word 'all', which will be expanded to all 32 outputs (A1 .. D8).
+       
+       Each name can also be a single number from 1-16, instead of a
+       letter/number pair. In that case, the number is treated as the 
+       'tile' number, and two outputs will be addressed. For example, 
+       using '3' is the same as specifying 'A7 A8'.
 """ % (sys.argv[0], sys.argv[0])
 
 RWARNING = """
@@ -182,6 +187,8 @@ if __name__ == '__main__':
             print('Error turning output/s off, output state unknown. Result=%s' % zip(onames, result))
     if action == 'status':
         result = proxy.get_powers()
+        voltages = []
+        currents = []
         for tid in range(1,17):
             onames = NMAP[tid]
             ostrings = []
@@ -193,10 +200,16 @@ if __name__ == '__main__':
                         ison = proxy.ison(oname)
                         pstate = {False:'OFF', True:'ON'}[ison]
                         v, i = result[oname]
-                    ostrings.append('<%s: %3s: %6.3f V, %6.3f mA>' % (oname, pstate, v, i))
+                    voltages.append(v)
+                    currents.append(i)
+                    ostrings.append('<%s %3s: %6.3f V, %7.3f mA>' % (oname, pstate, v, i))
                 else:
                     ostrings.append('%s: Unknown.' % oname)
-            print('Tile %2d: %s, %s' % (tid, ostrings[0], ostrings[1]))
+            print('Tile %2d: %s,  %s' % (tid, ostrings[0], ostrings[1]))
+        print('Voltages from %6.3v - %6.3v, Currents from %7.3f - %7.3f' % (min(voltages),
+                                                                            max(voltages),
+                                                                            min(currents),
+                                                                            max(currents)))
     elif action == 'version':
         result = proxy.version()
         print('Software Version running on %s is: %s' % (cname, result))
