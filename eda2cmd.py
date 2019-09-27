@@ -196,7 +196,7 @@ if __name__ == '__main__':
                     ostrings.append('<%s: %3s: %6.3f V, %6.3f mA>' % (oname, pstate, v, i))
                 else:
                     ostrings.append('%s: Unknown.' % oname)
-            print('Tile %d: %s, %s' % (tid, ostrings[0], ostrings[1]))
+            print('Tile %2d: %s, %s' % (tid, ostrings[0], ostrings[1]))
     elif action == 'version':
         result = proxy.version()
         print('Software Version running on %s is: %s' % (cname, result))
