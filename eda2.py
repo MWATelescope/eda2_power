@@ -770,14 +770,14 @@ def read_environment():
         with I2C_LOCK:
             try:
                 SMBUS.write_quick(0x27)
-                time.sleep(0.11)  # Wait 110ms for conversion
+                time.sleep(0.05)  # Wait 50ms for conversion
                 data = SMBUS.read_i2c_block_data(0x27, 0, 4)
             except:
                 logger.error('Exception in I2C communications: %s' % traceback.format_exc())
                 return None
         h_raw = (data[0] & 63) * 256 + data[1]
         humidity = h_raw / 16382.0 * 100.0
-        t_raw = (data[0] * 256 + data[1]) / 4
+        t_raw = (data[2] * 256 + data[3]) // 4
         temperature = t_raw / 16382.0 * 165 - 40
         return humidity, temperature
     except:
