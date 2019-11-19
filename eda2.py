@@ -62,7 +62,7 @@ import smbus
 
 import spidev
 
-VERSION = '0.9.1'
+VERSION = '0.9.2'
 
 USAGE = """
 EDA2 power controller.
@@ -877,6 +877,9 @@ if __name__ == '__main__':
         print "Turning on all outputs!"
         turn_all_on()
 
+    if not options.nopyro:
+        PYROHANDLER = PyroHandler()
+
     if options.rfi:
         logger.debug('About to start RFI loop.')
         rfithread = threading.Thread(target=rfiloop, name='RFIloop', kwargs={'fast':options.fast})
@@ -889,8 +892,6 @@ if __name__ == '__main__':
         monthread.start()
 
     if not options.nopyro:
-        PYROHANDLER = PyroHandler()
-
         # Start up the Pyro communications loop, to accept incoming commands.
         logger.debug('About to start Pyro loop.')
         pyrothread = threading.Thread(target=PYROHANDLER.servePyroRequests, name='Pyroloop')
