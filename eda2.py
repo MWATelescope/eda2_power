@@ -62,7 +62,7 @@ import smbus
 
 import spidev
 
-VERSION = '0.9.0'
+VERSION = '0.9.1'
 
 USAGE = """
 EDA2 power controller.
