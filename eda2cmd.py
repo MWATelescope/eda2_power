@@ -158,9 +158,7 @@ if __name__ == '__main__':
         if result:
             print("OK.")
     elif action == 'shutdown':
-        result = proxy.shutdown()
-        if result:
-            print("OK.")
+        proxy.shutdown()
     elif action == 'turn_all_on':
         result = proxy.turn_all_on()
         if result:
