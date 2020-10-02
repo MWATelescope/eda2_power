@@ -101,8 +101,7 @@ if __name__ == '__main__':
     cname = os.path.split(sys.argv[0])[-1]
     if cname == 'eda2cmd.py':
         print('Run this command symlinked to the name of the host to communicate with - eg fndh1 or fndh2')
-        sys.exit(-1
-                 )
+
     args = sys.argv[1:]
     tlist = []
     action = ''
