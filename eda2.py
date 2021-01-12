@@ -725,7 +725,7 @@ class PyroHandler(object):
         logger.info('Getting interface address for Pyro server')
         while iface is None:
             try:
-                iface = Pyro4.socketutil.getInterfaceAddress('10.128.0.1')  # What is the network IP of this receiver?
+                iface = Pyro4.socketutil.getInterfaceAddress('8.8.8.8')  # What is the network IP of this receiver?
             except socket.error:
                 logger.info("Network down, can't start Pyro server, sleeping for 10 seconds")
                 time.sleep(10)
