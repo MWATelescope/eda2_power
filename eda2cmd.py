@@ -16,6 +16,7 @@ Written by Andrew Williams (Andrew.Williams@curtin.edu.au).
 
 import os
 import sys
+import time
 import warnings
 
 import Pyro4
@@ -35,12 +36,9 @@ Usage: '%s <command> [<names>]' runs the specified command on host %s.
         The command can be:
             ping (check to see if we can communicate)
             
-            turn_all_on (turn on all outputs)
-            turn_all_off (turn off all outputs)
-            
-            ison <names> (query whether output <name> is turned on)
-            turnon <names> (turn on output <name>)
-            turnoff <names> (turn off output <name>)
+            ison <names> or 'all' (query whether output <name> is turned on)
+            turnon <names> or 'all' (turn on output <name>)
+            turnoff <names> or 'all' (turn off output <name>)
 
             reboot (reboot the Raspberry Pi - DANGEROUS)
             shutdown (shutdown & HALT the Raspberry Pi - VERY DANGEROUS)
@@ -61,6 +59,13 @@ Usage: '%s <command> [<names>]' runs the specified command on host %s.
        letter/number pair. In that case, the number is treated as the 
        'tile' number, and two outputs will be addressed. For example, 
        using '3' is the same as specifying 'A7 A8'.
+       
+       If an output name is preceded by a minus sign (-), then that output
+       will be excluded from the list to act on. For example, 
+       
+       ... turnon all -C   # Turn on everything except C1-C8
+       ... turnon all -B3  # Turn on everything except B3
+       ... turnon A B -A4 -A5   # Turn on A1-A3, A6-A8 and B1-B8
 """ % (sys.argv[0], sys.argv[0])
 
 RWARNING = """
@@ -102,6 +107,15 @@ if __name__ == '__main__':
     if cname == 'eda2cmd.py':
         print('Run this command symlinked to the name of the host to communicate with - eg fndh1 or fndh2')
 
+    if cname in ['fndh1', 'aavs2']:
+        logfilename = '/var/log/aavs2'
+    elif cname in ['fndh2', 'eda2']:
+        logfilename = '/var/log/eda2'
+    else:
+        logfilename = '/var/log/eda2cmd'
+    logfile = open(logfilename, 'a')
+    logfile.write('\n%s: Ran %s' % (time.ctime(), ' '.join(sys.argv)))
+
     args = sys.argv[1:]
     tlist = []
     action = ''
@@ -132,21 +146,33 @@ if __name__ == '__main__':
         print(USAGE)
         sys.exit(-1)
 
-    onames = []
+    includenames = []
+    excludenames = []
     for arg in args[1:]:
-        if arg.upper() in 'ABCD':
+        thesenames = []   # Expanded name list from just this argument
+        subflag = False
+        namespec = arg
+        if arg.startswith('-'):
+            subflag = True
+            namespec = arg[1:]
+        if namespec.upper() in 'ABCD':
             for digit in '12345678':
-                onames.append('%s%s' % (arg.upper(), digit))
-        elif (len(arg) == 2) and (arg[0] in 'ABCDabcd') and (arg[1] in '12345678'):
-            onames.append(arg.upper())
-        elif arg.isdigit() and 1 <= int(arg) <= 16:   # Tile number, to be looked up in NMAP
-            onames += NMAP[int(arg)]
-        elif arg.upper() == 'ALL':
-            onames = []
+                thesenames.append('%s%s' % (namespec.upper(), digit))
+        elif (len(namespec) == 2) and (namespec[0] in 'ABCDabcd') and (namespec[1] in '12345678'):
+            thesenames.append(namespec.upper())
+        elif namespec.isdigit() and 1 <= int(namespec) <= 16:   # Tile number, to be looked up in NMAP
+            thesenames += NMAP[int(namespec)]
+        elif namespec.upper() == 'ALL':
             for letter in 'ABCD':
                 for digit in '12345678':
-                    onames.append('%s%s' % (letter, digit))
-            break
+                    thesenames.append('%s%s' % (letter, digit))
+
+        if subflag:
+            excludenames += thesenames
+        else:
+            includenames += thesenames
+
+    onames = [x for x in includenames if x not in excludenames]
     onames.sort()
 
     proxy = Pyro4.Proxy('PYRO:eda2@%s.mwa128t.org:%d' % (cname, SLAVEPORT))
@@ -158,18 +184,23 @@ if __name__ == '__main__':
             print("OK.")
     elif action == 'shutdown':
         proxy.shutdown()
+        logfile.write('%s: shutdown.' % time.time())
     elif action == 'turn_all_on':
         result = proxy.turn_all_on()
         if result:
             print('All ON')
+            logfile.write('%s: All turned on.' % time.time())
         else:
             print('Error turning outputs on, output state unknown.')
+            logfile.write('%s: Error turning all outputs on, output state unknown.' % time.time())
     if action == 'turn_all_off':
         result = proxy.turn_all_off()
         if result:
             print('All OFF')
+            logfile.write('%s: All turned off.' % time.time())
         else:
             print('Error turning outputs off, output state unknown.')
+            logfile.write('%s: Error turning all outputs off, output state unknown.' % time.time())
     elif action == 'ison':
         result = proxy.ison(onames)
         for i in range(len(onames)):
@@ -178,14 +209,18 @@ if __name__ == '__main__':
         result = proxy.turnon(onames)
         if False not in result:
             print('%s turned ON' % ', '.join(onames))
+            logfile.write('%s: Output/s turned on: %s' % (time.time(), onames))
         else:
             print('Error turning output/s on, output state unknown. Result=%s' % zip(onames, result))
+            logfile.write('%s: Error turning output/s on, output state unknown. Result=%s' % (time.time(), zip(onames, result)))
     elif action == 'turnoff':
         result = proxy.turnoff(onames)
         if False not in result:
             print('%s turned OFF' % ', '.join(onames))
+            logfile.write('%s: Output/s turned of: %s' % (time.time(), onames))
         else:
             print('Error turning output/s off, output state unknown. Result=%s' % zip(onames, result))
+            logfile.write('%s: Error turning output/s off, output state unknown. Result=%s' % (time.time(), zip(onames, result)))
     if action == 'status':
         result = proxy.get_powers()
         voltages = []
@@ -208,9 +243,9 @@ if __name__ == '__main__':
                     ostrings.append('%s: Unknown.' % oname)
             print('Tile %2d:    %s\nTile %2d:    %s' % (tid, ostrings[0], tid, ostrings[1]))
         print('Voltages from %4.1f to %4.1f V, Currents from %3.0f to %3.0f mA' % (min(voltages),
-                                                                            max(voltages),
-                                                                            min(currents),
-                                                                            max(currents)))
+                                                                                   max(voltages),
+                                                                                   min(currents),
+                                                                                   max(currents)))
     elif action == 'version':
         result = proxy.version()
         print('Software Version running on %s is: %s' % (cname, result))
@@ -221,3 +256,5 @@ if __name__ == '__main__':
         else:
             humidity, temperature = result
             print('Temp=%4.1f degC, Humidity=%2.0f %%' % (temperature, humidity))
+
+    logfile.close()
