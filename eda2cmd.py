@@ -186,23 +186,23 @@ if __name__ == '__main__':
             print("OK.")
     elif action == 'shutdown':
         proxy.shutdown()
-        logfile.write('%s: shutdown.' % time.time())
+        logfile.write('%s: shutdown.\n' % time.time())
     elif action == 'turn_all_on':
         result = proxy.turn_all_on()
         if result:
             print('All ON')
-            logfile.write('%s: All turned on.' % time.time())
+            logfile.write('%s: All turned on.\n' % time.time())
         else:
             print('Error turning outputs on, output state unknown.')
-            logfile.write('%s: Error turning all outputs on, output state unknown.' % time.time())
+            logfile.write('%s: Error turning all outputs on, output state unknown.\n' % time.time())
     if action == 'turn_all_off':
         result = proxy.turn_all_off()
         if result:
             print('All OFF')
-            logfile.write('%s: All turned off.' % time.time())
+            logfile.write('%s: All turned off.\n' % time.time())
         else:
             print('Error turning outputs off, output state unknown.')
-            logfile.write('%s: Error turning all outputs off, output state unknown.' % time.time())
+            logfile.write('%s: Error turning all outputs off, output state unknown.\n' % time.time())
     elif action == 'ison':
         result = proxy.ison(onames)
         for i in range(len(onames)):
@@ -211,10 +211,10 @@ if __name__ == '__main__':
         result = proxy.turnon(onames)
         if False not in result:
             print('%s turned ON' % ', '.join(onames))
-            logfile.write('%s: Output/s turned on: %s' % (time.time(), onames))
+            logfile.write('%s: Output/s turned on: %s\n' % (time.time(), onames))
         else:
             print('Error turning output/s on, output state unknown. Result=%s' % zip(onames, result))
-            logfile.write('%s: Error turning output/s on, output state unknown. Result=%s' % (time.time(), zip(onames, result)))
+            logfile.write('%s: Error turning output/s on, output state unknown. Result=%s\n' % (time.time(), zip(onames, result)))
     elif action == 'turnoff':
         result = proxy.turnoff(onames)
         if False not in result:
@@ -222,7 +222,7 @@ if __name__ == '__main__':
             logfile.write('%s: Output/s turned of: %s' % (time.time(), onames))
         else:
             print('Error turning output/s off, output state unknown. Result=%s' % zip(onames, result))
-            logfile.write('%s: Error turning output/s off, output state unknown. Result=%s' % (time.time(), zip(onames, result)))
+            logfile.write('%s: Error turning output/s off, output state unknown. Result=%s\n' % (time.time(), zip(onames, result)))
     if action == 'status':
         result = proxy.get_powers()
         voltages = []
