@@ -15,6 +15,7 @@ Written by Andrew Williams (Andrew.Williams@curtin.edu.au).
 """
 
 import os
+import pwd
 import sys
 import time
 import warnings
@@ -113,6 +114,7 @@ if __name__ == '__main__':
         logfilename = '/var/log/eda2'
     else:
         logfilename = '/var/log/eda2cmd'
+    logfilename += '.%s' % pwd.getpwuid(os.getuid())[0]
     logfile = open(logfilename, 'a')
     logfile.write('\n%s: Ran %s' % (time.ctime(), ' '.join(sys.argv)))
 
