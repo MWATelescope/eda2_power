@@ -109,12 +109,12 @@ if __name__ == '__main__':
         print('Run this command symlinked to the name of the host to communicate with - eg fndh1 or fndh2')
 
     if cname in ['fndh1', 'aavs2']:
-        logfilename = '/var/log/aavs2'
+        logfilename = '/var/log/fndh/aavs2'
     elif cname in ['fndh2', 'eda2']:
-        logfilename = '/var/log/eda2'
+        logfilename = '/var/log/fndh/eda2'
     else:
-        logfilename = '/var/log/eda2cmd'
-    logfilename += '.%s' % pwd.getpwuid(os.getuid())[0]
+        logfilename = '/var/log/fndh/eda2cmd'
+    logfilename += '.%s.txt' % pwd.getpwuid(os.getuid())[0]
     logfile = open(logfilename, 'a')
     logfile.write('\n%s: Ran %s' % (time.ctime(), ' '.join(sys.argv)))
 
