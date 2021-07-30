@@ -116,8 +116,8 @@ if __name__ == '__main__':
         logfilename = '/var/log/fndh/eda2cmd'
     logfilename += '.%s.txt' % pwd.getpwuid(os.getuid())[0]
     logfile = open(logfilename, 'a')
-    logfile.write('\n%s AWST: Ran "%s"\n' % (time.ctime(), ' '.join(sys.argv)))
-    print('\n%s AWST: Ran "%s"\n' % (time.strftime('%a %H:%M:%S'), ' '.join(sys.argv)))
+    logfile.write('\n%s: Ran "%s"\n' % (time.strftime('%a %Y-%m-%d %H:%M:%S AWST'), ' '.join(sys.argv)))
+    print('\n%s: Ran "%s"\n' % (time.strftime('%a %Y-%m-%d %H:%M:%S AWST'), ' '.join(sys.argv)))
 
     args = sys.argv[1:]
     tlist = []
