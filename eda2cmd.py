@@ -117,7 +117,7 @@ if __name__ == '__main__':
     logfilename += '.%s.txt' % pwd.getpwuid(os.getuid())[0]
     logfile = open(logfilename, 'a')
     logfile.write('\n%s AWST: Ran "%s"\n' % (time.ctime(), ' '.join(sys.argv)))
-    print('\n%s AWST: Ran "%s"\n' % (time.strftime('%a %H:%M:%s'), ' '.join(sys.argv)))
+    print('\n%s AWST: Ran "%s"\n' % (time.strftime('%a %H:%M:%S'), ' '.join(sys.argv)))
 
     args = sys.argv[1:]
     tlist = []
