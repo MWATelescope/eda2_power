@@ -821,7 +821,7 @@ def rfiloop(fast=False):
         delay = 0.01
     else:
         delay = 0.5
-    while not PYROHANDLER.exit:
+    while (PYROHANDLER is None) or (not PYROHANDLER.exit):
         for number in '12345678':
             for letter in 'ABCD':
                 name = '%s%s' % (letter, number)
@@ -839,7 +839,7 @@ def rfiloop(fast=False):
 def monitorloop():
     """Loop forever, printing current and voltage values. Does not exit.
     """
-    while not PYROHANDLER.exit:
+    while (PYROHANDLER is None) or (not PYROHANDLER.exit):
         logger.debug('started monitor loop.')
         print
         for number in '12345678':
