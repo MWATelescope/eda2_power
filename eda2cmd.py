@@ -182,7 +182,7 @@ if __name__ == '__main__':
     onames.sort()
 
     if cname == 'fndh':
-        fqdn = subprocess.check_output(['hostname', '-A'], shell=False)
+        fqdn = subprocess.check_output(['hostname', '-A'], shell=False).strip()
         proxy = Pyro4.Proxy('PYRO:eda2@%s:%d' % (fqdn, SLAVEPORT))
     else:
         proxy = Pyro4.Proxy('PYRO:eda2@%s.mwa128t.org:%d' % (cname, SLAVEPORT))
