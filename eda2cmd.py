@@ -16,6 +16,7 @@ Written by Andrew Williams (Andrew.Williams@curtin.edu.au).
 
 import os
 import pwd
+import subprocess
 import sys
 import time
 import warnings
@@ -112,8 +113,8 @@ if __name__ == '__main__':
         logfilename = '/var/log/fndh/aavs2'
     elif cname in ['fndh2', 'eda2']:
         logfilename = '/var/log/fndh/eda2'
-    elif cname == 'local':
-        logfilename = '/var/log/eda2/local'
+    elif cname == 'fndh':
+        logfilename = '/var/log/eda2/fndh'
     else:
         logfilename = '/var/log/fndh/eda2cmd'
     logfilename += '.%s.txt' % pwd.getpwuid(os.getuid())[0]
@@ -180,8 +181,9 @@ if __name__ == '__main__':
     onames = [x for x in includenames if x not in excludenames]
     onames.sort()
 
-    if cname == 'local':
-        proxy = Pyro4.Proxy('PYRO:eda2@localhost:%d' % SLAVEPORT)
+    if cname == 'fndh':
+        fqdn = subprocess.check_output(['hostname', '-A'], shell=False)
+        proxy = Pyro4.Proxy('PYRO:eda2@%s:%d' % (fqdn, SLAVEPORT))
     else:
         proxy = Pyro4.Proxy('PYRO:eda2@%s.mwa128t.org:%d' % (cname, SLAVEPORT))
 
