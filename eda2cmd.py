@@ -112,6 +112,8 @@ if __name__ == '__main__':
         logfilename = '/var/log/fndh/aavs2'
     elif cname in ['fndh2', 'eda2']:
         logfilename = '/var/log/fndh/eda2'
+    elif cname == 'local':
+        logfilename = '/var/log/eda2/local'
     else:
         logfilename = '/var/log/fndh/eda2cmd'
     logfilename += '.%s.txt' % pwd.getpwuid(os.getuid())[0]
@@ -178,7 +180,10 @@ if __name__ == '__main__':
     onames = [x for x in includenames if x not in excludenames]
     onames.sort()
 
-    proxy = Pyro4.Proxy('PYRO:eda2@%s.mwa128t.org:%d' % (cname, SLAVEPORT))
+    if cname == 'local':
+        proxy = Pyro4.Proxy('PYRO:eda2@localhost:%d' % SLAVEPORT)
+    else:
+        proxy = Pyro4.Proxy('PYRO:eda2@%s.mwa128t.org:%d' % (cname, SLAVEPORT))
 
     result = None
     if action == 'ping':
