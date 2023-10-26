@@ -108,6 +108,6 @@ if __name__ == "__main__":
     env_data = p.read_environment()
 
     res, outstring, perfparams = main(powers=powers, env_data=env_data)
-    print outstring + " | " + " ".join(perfparams) + " "
+    print(outstring + " | " + " ".join(perfparams) + " ")
 
     sys.exit(res)
